@@ -133,33 +133,8 @@ jobs:
         with:
           tag_name: ${{ github.ref }}
           release_name: Release ${{ steps.extract_version.outputs.version }}
-          body: |
-            ## FreshGuard Core v${{ steps.extract_version.outputs.version }}
-
-            ### 🚀 Installation
-
-            ```bash
-            pnpm install @thias-se/freshguard-core
-            ```
-
-            ### 📖 Documentation
-
-            See [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md) for usage instructions.
-
-            ### 🔧 What's in this release
-
-            - Core monitoring algorithms (freshness, volume anomaly detection)
-            - Database connectors (PostgreSQL, DuckDB)
-            - Single-tenant schema and types
-            - CLI tools for self-hosted installations
-
-            ### ⚖️ License
-
-            MIT License - see [LICENSE](LICENSE) file for details.
-
-            ### 🏗️ Open Core Model
-
-            This is the open-source core of FreshGuard. See [docs/LICENSE_CLARIFICATION.md](docs/LICENSE_CLARIFICATION.md) for details about the open-core model.
+          #body_path: .github/release-notes.md  # Optional custom file
+          generate-release-notes: true  # Auto-generates from commits/PRs
           draft: false
           prerelease: false
 
