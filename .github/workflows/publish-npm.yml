@@ -121,7 +121,7 @@ jobs:
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Publish package
-        run: pnpm publish --access public --provenance
+        run: pnpm publish --access public --provenance --no-git-checks
 
       - name: Create GitHub release
         uses: actions/create-release@v1
