@@ -181,9 +181,25 @@ export class TimeoutError extends FreshGuardError {
     operationType: string = 'unknown',
     timeoutMs: number = 0
   ) {
-    super(message, 'OPERATION_TIMEOUT', true);
+    const sanitizedMessage = TimeoutError.sanitizeTimeoutError(message);
+    super(sanitizedMessage, 'OPERATION_TIMEOUT', true);
     this.operationType = operationType;
     this.timeoutMs = timeoutMs;
+  }
+
+  private static sanitizeTimeoutError(message: string): string {
+    const lowerMessage = message.toLowerCase();
+
+    if (lowerMessage.includes('query timeout')) {
+      return 'Query timeout - operation took too long';
+    }
+
+    if (lowerMessage.includes('connection timeout')) {
+      return 'Connection timeout - check network connectivity';
+    }
+
+    // Generic timeout message
+    return 'Operation timeout - request took too long';
   }
 
   static queryTimeout(timeoutMs: number): TimeoutError {

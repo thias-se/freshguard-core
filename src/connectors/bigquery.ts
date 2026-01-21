@@ -63,6 +63,28 @@ export class BigQueryConnector extends BaseConnector {
     if (!config.password && !config.username) {
       throw new ConfigurationError('Service account credentials required for BigQuery');
     }
+
+    // Validate service account credentials if provided
+    if (config.password) {
+      try {
+        // Parse service account JSON from password field
+        const credentials = JSON.parse(config.password);
+
+        // Validate that this looks like a service account key
+        if (!credentials.type || credentials.type !== 'service_account') {
+          throw new SecurityError('Invalid service account credentials format');
+        }
+
+        if (!credentials.project_id || credentials.project_id !== config.database) {
+          throw new SecurityError('Service account project ID does not match specified project');
+        }
+      } catch (error) {
+        if (error instanceof SecurityError) {
+          throw error;
+        }
+        throw new ConfigurationError('Invalid service account JSON in password field');
+      }
+    }
   }
 
   /**
@@ -83,26 +105,9 @@ export class BigQueryConnector extends BaseConnector {
 
       // Handle authentication - prioritize service account key
       if (this.config.password) {
-        try {
-          // Parse service account JSON from password field
-          const credentials = JSON.parse(this.config.password);
-
-          // Validate that this looks like a service account key
-          if (!credentials.type || credentials.type !== 'service_account') {
-            throw new SecurityError('Invalid service account credentials format');
-          }
-
-          if (!credentials.project_id || credentials.project_id !== this.projectId) {
-            throw new SecurityError('Service account project ID does not match specified project');
-          }
-
-          bigqueryOptions.credentials = credentials;
-        } catch (error) {
-          if (error instanceof SecurityError) {
-            throw error;
-          }
-          throw new ConfigurationError('Invalid service account JSON in password field');
-        }
+        // Service account validation was already done in constructor
+        const credentials = JSON.parse(this.config.password);
+        bigqueryOptions.credentials = credentials;
       } else {
         // Fallback to Application Default Credentials
         console.warn('No service account provided, using Application Default Credentials');

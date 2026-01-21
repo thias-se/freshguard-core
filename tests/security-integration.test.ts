@@ -124,35 +124,35 @@ describe('SQL Injection Attack Prevention', () => {
   });
 
   describe('Complex Injection Scenarios', () => {
-    it('should handle nested injection attempts', () => {
+    it('should handle nested injection attempts', async () => {
       const connector = new PostgresConnector(SECURITY_TEST_CONFIGS.postgres);
 
       // Attempt to nest multiple attack vectors
       const complexAttack = "users'; INSERT INTO admin_log SELECT 'hacked' WHERE '1'='1'; DROP TABLE audit; --";
 
-      expect(async () => {
+      await expect(async () => {
         await connector.getRowCount(complexAttack);
       }).rejects.toThrow(SecurityError);
     });
 
-    it('should handle encoded injection attempts', () => {
+    it('should handle encoded injection attempts', async () => {
       const connector = new DuckDBConnector(SECURITY_TEST_CONFIGS.duckdb);
 
       // URL-encoded injection attempt
       const encodedAttack = 'users%3B%20DROP%20TABLE%20admin%3B%20--';
 
-      expect(async () => {
+      await expect(async () => {
         await connector.getRowCount(encodedAttack);
       }).rejects.toThrow();
     });
 
-    it('should handle unicode injection attempts', () => {
+    it('should handle unicode injection attempts', async () => {
       const connector = new PostgresConnector(SECURITY_TEST_CONFIGS.postgres);
 
       // Unicode characters that might bypass filters
       const unicodeAttack = 'users\u003B DROP TABLE admin\u003B \u002D\u002D';
 
-      expect(async () => {
+      await expect(async () => {
         await connector.getRowCount(unicodeAttack);
       }).rejects.toThrow();
     });
@@ -303,7 +303,7 @@ describe('Timeout and DoS Protection', () => {
     // Create connector with very short timeout
     const shortTimeoutConfig = {
       ...SECURITY_TEST_CONFIGS.postgres,
-      timeout: 1, // 1ms timeout
+      timeout: 1000, // 1 second timeout (minimum allowed)
     };
 
     const connector = new PostgresConnector(shortTimeoutConfig);
@@ -315,7 +315,7 @@ describe('Timeout and DoS Protection', () => {
   it('should enforce query timeouts', async () => {
     const shortQueryTimeoutConfig = {
       ...SECURITY_TEST_CONFIGS.duckdb,
-      queryTimeout: 1, // 1ms timeout
+      queryTimeout: 1000, // 1 second timeout (minimum allowed)
     };
 
     const connector = new DuckDBConnector(shortQueryTimeoutConfig);
@@ -448,7 +448,7 @@ describe('Multi-Vector Attack Simulation', () => {
 });
 
 describe('Real-World Attack Patterns', () => {
-  it('should prevent OWASP SQL injection patterns', () => {
+  it('should prevent OWASP SQL injection patterns', async () => {
     const connector = new PostgresConnector(SECURITY_TEST_CONFIGS.postgres);
 
     // Common OWASP Top 10 SQL injection patterns
@@ -462,13 +462,13 @@ describe('Real-World Attack Patterns', () => {
     ];
 
     for (const pattern of owaspPatterns) {
-      expect(async () => {
+      await expect(async () => {
         await connector.getRowCount('users' + pattern);
       }).rejects.toThrow();
     }
   });
 
-  it('should prevent NoSQL-style injection attempts', () => {
+  it('should prevent NoSQL-style injection attempts', async () => {
     const connector = new BigQueryConnector(SECURITY_TEST_CONFIGS.bigquery);
 
     // Patterns that might work in NoSQL but should fail here
@@ -479,13 +479,13 @@ describe('Real-World Attack Patterns', () => {
     ];
 
     for (const pattern of noSqlPatterns) {
-      expect(async () => {
+      await expect(async () => {
         await connector.getRowCount('collection' + pattern);
       }).rejects.toThrow();
     }
   });
 
-  it('should prevent time-based blind SQL injection', () => {
+  it('should prevent time-based blind SQL injection', async () => {
     const connector = new PostgresConnector(SECURITY_TEST_CONFIGS.postgres);
 
     // Time-based attack patterns
@@ -496,7 +496,7 @@ describe('Real-World Attack Patterns', () => {
     ];
 
     for (const pattern of timeBasedPatterns) {
-      expect(async () => {
+      await expect(async () => {
         await connector.getRowCount('users' + pattern);
       }).rejects.toThrow();
     }
