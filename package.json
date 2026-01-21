@@ -1,6 +1,6 @@
 {
   "name": "@thias-se/freshguard-core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Open source data freshness monitoring engine",
   "type": "module",
   "main": "./dist/index.js",
@@ -35,7 +35,7 @@
     "prepublishOnly": "pnpm build && pnpm test"
   },
   "dependencies": {
-    "@duckdb/node-api": "^1.4.3-r.3",
+    "@duckdb/node-api": "1.4.3-r.3",
     "drizzle-orm": "^0.45.1",
     "pg": "^8.17.2",
     "postgres": "^3.4.8"

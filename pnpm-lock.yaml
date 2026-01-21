@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       '@duckdb/node-api':
-        specifier: ^1.4.3-r.3
+        specifier: 1.4.3-r.3
         version: 1.4.3-r.3
       drizzle-orm:
         specifier: ^0.45.1
