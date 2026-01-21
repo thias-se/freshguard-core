@@ -1,235 +1,527 @@
 /**
- * BigQuery connector
- * Handles connections to Google BigQuery data warehouse
+ * Secure BigQuery connector for FreshGuard Core
+ * Extends BaseConnector with security built-in
  *
  * @module @thias-se/freshguard-core/connectors/bigquery
  */
 
 import { BigQuery } from '@google-cloud/bigquery';
+import { BaseConnector } from './base-connector.js';
+import type { ConnectorConfig, TableSchema } from '../types/connector.js';
 import type { SourceCredentials } from '../types.js';
+import {
+  ConnectionError,
+  TimeoutError,
+  QueryError,
+  ConfigurationError,
+  SecurityError,
+  ErrorHandler
+} from '../errors/index.js';
+import { validateDatabaseIdentifier } from '../validators/index.js';
 
 /**
- * BigQuery connector
- * Connects to Google BigQuery using service account or application default credentials
+ * Secure BigQuery connector
+ *
+ * Features:
+ * - SQL injection prevention
+ * - Credential validation
+ * - Read-only query patterns
+ * - Connection timeouts
+ * - Secure error handling
  */
-export class BigQueryConnector {
+export class BigQueryConnector extends BaseConnector {
   private client: BigQuery | null = null;
   private projectId: string = '';
+  private location: string = 'US';
+  private connected: boolean = false;
+
+  constructor(config: ConnectorConfig) {
+    // Validate BigQuery-specific configuration
+    BigQueryConnector.validateBigQueryConfig(config);
+    super(config);
+
+    // For BigQuery, database field contains the project ID
+    this.projectId = config.database;
+  }
 
   /**
-   * Connect to BigQuery
-   *
-   * @param credentials - Connection credentials
+   * Validate BigQuery-specific configuration
    */
-  async connect(credentials: SourceCredentials): Promise<void> {
-    const options = credentials.additionalOptions || {};
+  private static validateBigQueryConfig(config: ConnectorConfig): void {
+    if (!config.database) {
+      throw new ConfigurationError('Project ID is required for BigQuery (use database field)');
+    }
 
-    // Extract project ID from credentials or additional options
-    this.projectId = (options.projectId as string) || credentials.database || '';
+    // Validate project ID format (Google Cloud project IDs have specific rules)
+    const projectIdPattern = /^[a-z][a-z0-9\-]*[a-z0-9]$/;
+    if (!projectIdPattern.test(config.database)) {
+      throw new ConfigurationError('Invalid BigQuery project ID format');
+    }
 
-    if (!this.projectId) {
-      throw new Error('Missing required BigQuery project ID (provide in additionalOptions.projectId or database field)');
+    // BigQuery uses service account authentication, not traditional username/password
+    // But we still require them for consistency with the interface
+    if (!config.password && !config.username) {
+      throw new ConfigurationError('Service account credentials required for BigQuery');
+    }
+  }
+
+  /**
+   * Connect to BigQuery with security validation
+   */
+  private async connect(): Promise<void> {
+    if (this.connected && this.client) {
+      return; // Already connected
     }
 
     try {
       const bigqueryOptions: any = {
         projectId: this.projectId,
+        location: this.location,
+        // Timeout for BigQuery operations
+        queryTimeoutMs: this.queryTimeout,
       };
 
-      // Handle different authentication methods
-      if (options.keyFilename) {
-        bigqueryOptions.keyFilename = options.keyFilename as string;
-      } else if (options.credentials) {
-        bigqueryOptions.credentials = options.credentials;
-      } else if (options.useApplicationDefault) {
-        // Use Application Default Credentials - no additional config needed
-      } else if (credentials.password) {
-        // Treat password as service account JSON string
+      // Handle authentication - prioritize service account key
+      if (this.config.password) {
         try {
-          bigqueryOptions.credentials = JSON.parse(credentials.password);
+          // Parse service account JSON from password field
+          const credentials = JSON.parse(this.config.password);
+
+          // Validate that this looks like a service account key
+          if (!credentials.type || credentials.type !== 'service_account') {
+            throw new SecurityError('Invalid service account credentials format');
+          }
+
+          if (!credentials.project_id || credentials.project_id !== this.projectId) {
+            throw new SecurityError('Service account project ID does not match specified project');
+          }
+
+          bigqueryOptions.credentials = credentials;
         } catch (error) {
-          throw new Error('Invalid service account JSON in password field');
+          if (error instanceof SecurityError) {
+            throw error;
+          }
+          throw new ConfigurationError('Invalid service account JSON in password field');
         }
+      } else {
+        // Fallback to Application Default Credentials
+        console.warn('No service account provided, using Application Default Credentials');
       }
 
-      // Set location if provided
-      if (options.location) {
-        bigqueryOptions.location = options.location as string;
-      }
+      // Create BigQuery client with timeout protection
+      this.client = await this.executeWithTimeout(
+        () => new Promise<BigQuery>((resolve) => {
+          const client = new BigQuery(bigqueryOptions);
+          resolve(client);
+        }),
+        this.connectionTimeout
+      );
 
-      this.client = new BigQuery(bigqueryOptions);
+      // Test authentication by listing datasets (limited)
+      await this.executeWithTimeout(
+        () => this.client!.getDatasets({ maxResults: 1 }),
+        this.connectionTimeout
+      );
 
-      // Test authentication by listing one dataset
-      await this.client.getDatasets({ maxResults: 1 });
+      this.connected = true;
     } catch (error) {
-      throw new Error(`Failed to connect to BigQuery: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      if (error instanceof TimeoutError || error instanceof SecurityError) {
+        throw error;
+      }
+
+      throw new ConnectionError(
+        'Failed to connect to BigQuery',
+        'bigquery.googleapis.com',
+        443,
+        error instanceof Error ? error : undefined
+      );
     }
   }
 
   /**
-   * Test connection by executing a simple query
-   *
-   * @returns Connection test result
+   * Execute a validated SQL query with security measures
    */
-  async testConnection(): Promise<{ success: boolean; tableCount?: number; error?: string }> {
+  protected async executeQuery(sql: string): Promise<any[]> {
+    await this.connect();
+
     if (!this.client) {
-      throw new Error('Not connected. Call connect() first.');
+      throw new ConnectionError('BigQuery client not available');
     }
 
     try {
-      // Test connection with a simple query
-      const query = 'SELECT 1 as test';
-      await this.client.query({ query });
+      const [rows] = await this.executeWithTimeout(
+        () => this.client!.query({
+          query: sql,
+          location: this.location,
+          maxResults: this.maxRows,
+          timeoutMs: this.queryTimeout,
+          useLegacySql: false, // Force standard SQL for security
+        }),
+        this.queryTimeout
+      );
 
-      // Get table count across all datasets in the project
-      const tableCountQuery = `
-        SELECT COUNT(*) as count
-        FROM \`${this.projectId}.INFORMATION_SCHEMA.TABLES\`
-        WHERE table_type = 'BASE_TABLE'
-      `;
+      // Validate result size for security
+      this.validateResultSize(rows);
 
-      const [rows] = await this.client.query({ query: tableCountQuery });
-      const tableCount = parseInt(rows[0]?.count || '0', 10);
-
-      return {
-        success: true,
-        tableCount,
-      };
+      return rows;
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
+      if (error instanceof TimeoutError) {
+        throw error;
+      }
+
+      // Sanitize and re-throw as QueryError
+      throw new QueryError(
+        ErrorHandler.getUserMessage(error),
+        'query_execution',
+        undefined,
+        error instanceof Error ? error : undefined
+      );
     }
   }
 
   /**
-   * List all tables in the project
-   *
-   * @returns Array of table names in format: dataset.table
+   * Test database connection with security validation
+   */
+  async testConnection(): Promise<boolean> {
+    try {
+      await this.connect();
+
+      if (!this.client) {
+        return false;
+      }
+
+      // Test with a simple, safe query
+      const sql = 'SELECT 1 as test';
+      this.validateQuery(sql);
+
+      await this.executeWithTimeout(
+        () => this.client!.query({ query: sql, location: this.location }),
+        this.connectionTimeout
+      );
+
+      return true;
+    } catch (error) {
+      // Don't throw - this method should return boolean
+      return false;
+    }
+  }
+
+  /**
+   * List all tables in the project (limited to accessible datasets)
    */
   async listTables(): Promise<string[]> {
-    if (!this.client) {
-      throw new Error('Not connected. Call connect() first.');
-    }
+    const sql = `
+      SELECT
+        CONCAT(table_schema, '.', table_name) as table_name
+      FROM \`${this.projectId}.INFORMATION_SCHEMA.TABLES\`
+      WHERE table_type = 'BASE_TABLE'
+      ORDER BY table_schema, table_name
+      LIMIT ${this.maxRows}
+    `;
+
+    this.validateQuery(sql);
 
     try {
-      const query = `
-        SELECT
-          CONCAT(table_schema, '.', table_name) as table_name
-        FROM \`${this.projectId}.INFORMATION_SCHEMA.TABLES\`
-        WHERE table_type = 'BASE_TABLE'
-        ORDER BY table_schema, table_name
-      `;
-
-      const [rows] = await this.client.query({ query });
-      return rows.map((row: any) => row.table_name);
+      const result = await this.executeQuery(sql);
+      return result.map((row: any) => row.table_name).filter(Boolean);
     } catch (error) {
-      throw new Error(`Failed to list tables: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new QueryError(
+        'Failed to list tables',
+        'table_listing',
+        undefined,
+        error instanceof Error ? error : undefined
+      );
     }
   }
 
   /**
-   * Get table metadata (row count, last update)
-   *
-   * @param tableName - Name of the table (format: dataset.table or project.dataset.table)
-   * @param timestampColumn - Column to check for last update
-   * @returns Table metadata
+   * Get table schema information securely
    */
-  async getTableMetadata(
-    tableName: string,
-    timestampColumn: string = 'updated_at'
-  ): Promise<{ rowCount: number; lastUpdate?: Date }> {
-    if (!this.client) {
-      throw new Error('Not connected. Call connect() first.');
-    }
+  async getTableSchema(table: string): Promise<TableSchema> {
+    const parsedTable = this.parseTableName(table);
+
+    const sql = `
+      SELECT
+        column_name,
+        data_type,
+        is_nullable
+      FROM \`${parsedTable.split('.')[0]}.${parsedTable.split('.')[1]}.INFORMATION_SCHEMA.COLUMNS\`
+      WHERE table_name = '${parsedTable.split('.')[2]}'
+      ORDER BY ordinal_position
+      LIMIT ${this.maxRows}
+    `;
+
+    this.validateQuery(sql);
 
     try {
-      // Parse table name to handle different formats
-      const fullTableName = this.parseTableName(tableName);
+      const result = await this.executeQuery(sql);
 
-      // Get row count and last update time
-      const query = `
-        SELECT
-          COUNT(*) as row_count,
-          MAX(${timestampColumn}) as last_update
-        FROM \`${fullTableName}\`
-      `;
-
-      const [rows] = await this.client.query({ query });
-      const result = rows[0];
+      if (result.length === 0) {
+        throw QueryError.tableNotFound(table);
+      }
 
       return {
-        rowCount: parseInt(result?.row_count || '0', 10),
-        lastUpdate: result?.last_update ? new Date(result.last_update) : undefined,
+        table,
+        columns: result.map(row => ({
+          name: row.column_name,
+          type: this.mapBigQueryType(row.data_type),
+          nullable: row.is_nullable === 'YES'
+        }))
       };
     } catch (error) {
-      // If the timestamp column doesn't exist, try to get just the row count
-      try {
-        const fullTableName = this.parseTableName(tableName);
-        const countQuery = `SELECT COUNT(*) as row_count FROM \`${fullTableName}\``;
-        const [rows] = await this.client.query({ query: countQuery });
-
-        return {
-          rowCount: parseInt(rows[0]?.row_count || '0', 10),
-          lastUpdate: undefined,
-        };
-      } catch {
-        throw new Error(`Failed to get table metadata: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      if (error instanceof QueryError) {
+        throw error;
       }
+
+      throw new QueryError(
+        'Failed to get table schema',
+        'schema_query',
+        table,
+        error instanceof Error ? error : undefined
+      );
     }
   }
 
   /**
-   * Execute a custom SQL query
-   *
-   * @param query - SQL query to execute
-   * @returns Query result
+   * Get last modified timestamp for BigQuery tables
+   * Uses BigQuery's table metadata when possible
    */
-  async query<T = unknown>(query: string): Promise<T[]> {
-    if (!this.client) {
-      throw new Error('Not connected. Call connect() first.');
-    }
+  async getLastModified(table: string): Promise<Date | null> {
+    const parsedTable = this.parseTableName(table);
 
     try {
-      const [rows] = await this.client.query({ query });
-      return rows as T[];
+      // First try to get table metadata from BigQuery API
+      const [dataset, tableId] = parsedTable.split('.').slice(-2);
+
+      if (this.client && dataset && tableId) {
+        const tableRef = this.client.dataset(dataset).table(tableId);
+        const [metadata] = await tableRef.getMetadata();
+
+        if (metadata.lastModifiedTime) {
+          return new Date(parseInt(metadata.lastModifiedTime));
+        }
+      }
+    } catch {
+      // Fallback to SQL-based approach
+    }
+
+    // Try common timestamp columns
+    const timestampColumns = ['updated_at', 'modified_at', 'last_modified', 'timestamp', '_airbyte_extracted_at'];
+
+    for (const column of timestampColumns) {
+      try {
+        const result = await this.getMaxTimestamp(table, column);
+        if (result) {
+          return result;
+        }
+      } catch {
+        // Column doesn't exist, try next one
+        continue;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Close the BigQuery connection
+   */
+  async close(): Promise<void> {
+    try {
+      // BigQuery client doesn't require explicit cleanup
+      // Just reset references
+      this.client = null;
+      this.connected = false;
     } catch (error) {
-      throw new Error(`Query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Log error but don't throw
+      console.warn('Warning: Error closing BigQuery connection:', ErrorHandler.getUserMessage(error));
     }
   }
 
   /**
-   * Close the connection
+   * Map BigQuery data types to standard types
    */
-  async close(): Promise<void> {
-    // BigQuery client doesn't require explicit connection closing
-    // Just reset the client reference
-    this.client = null;
-    this.projectId = '';
+  private mapBigQueryType(bqType: string): string {
+    const typeMap: Record<string, string> = {
+      'STRING': 'text',
+      'BYTES': 'binary',
+      'INTEGER': 'bigint',
+      'INT64': 'bigint',
+      'FLOAT': 'float',
+      'FLOAT64': 'float',
+      'NUMERIC': 'decimal',
+      'DECIMAL': 'decimal',
+      'BIGNUMERIC': 'decimal',
+      'BOOLEAN': 'boolean',
+      'TIMESTAMP': 'timestamptz',
+      'DATE': 'date',
+      'TIME': 'time',
+      'DATETIME': 'timestamp',
+      'JSON': 'json',
+      'ARRAY': 'array',
+      'STRUCT': 'object',
+      'RECORD': 'object',
+      'GEOGRAPHY': 'geography'
+    };
+
+    return typeMap[bqType.toUpperCase()] || 'unknown';
   }
 
   /**
-   * Parse table name to ensure proper project.dataset.table format
-   *
-   * @private
-   * @param tableName - Input table name
-   * @returns Fully qualified table name
+   * Parse and validate table name for BigQuery
    */
   private parseTableName(tableName: string): string {
+    validateDatabaseIdentifier(tableName, 'table');
+
     const parts = tableName.split('.');
 
     if (parts.length === 3) {
-      // Already fully qualified: project.dataset.table
+      // project.dataset.table format
+      const [project, dataset, table] = parts;
+
+      // Validate project matches
+      if (project !== this.projectId) {
+        throw new SecurityError('Table project does not match configured project');
+      }
+
       return tableName;
     } else if (parts.length === 2) {
       // dataset.table format - prepend project
       return `${this.projectId}.${tableName}`;
     } else if (parts.length === 1) {
-      // Just table name - need to handle this case
-      throw new Error(`Table name '${tableName}' must include dataset (format: dataset.table)`);
+      // Just table name - need dataset
+      throw new QueryError('Table name must include dataset (format: dataset.table)', 'invalid_table_name');
     } else {
-      throw new Error(`Invalid table name format: '${tableName}'. Expected: dataset.table or project.dataset.table`);
+      throw new QueryError('Invalid table name format', 'invalid_table_name');
     }
+  }
+
+  // ==============================================
+  // Legacy API compatibility methods
+  // ==============================================
+
+  /**
+   * Legacy connect method for backward compatibility
+   * @deprecated Use constructor with ConnectorConfig instead
+   */
+  async connectLegacy(credentials: SourceCredentials): Promise<void> {
+    console.warn('Warning: connectLegacy is deprecated. Use constructor with ConnectorConfig instead.');
+
+    const options = credentials.additionalOptions || {};
+    const projectId = (options.projectId as string) || credentials.database || '';
+
+    if (!projectId) {
+      throw new ConfigurationError('BigQuery project ID is required');
+    }
+
+    const config: ConnectorConfig = {
+      host: 'bigquery.googleapis.com',
+      port: 443,
+      database: projectId,
+      username: credentials.username || 'bigquery',
+      password: credentials.password || '',
+      ssl: true
+    };
+
+    // Set location if provided
+    if (options.location) {
+      this.location = options.location as string;
+    }
+
+    // Validate and reconnect
+    BigQueryConnector.validateBigQueryConfig(config);
+    this.config = { ...this.config, ...config };
+    this.projectId = config.database;
+    await this.connect();
+  }
+
+  /**
+   * Legacy test connection method for backward compatibility
+   * @deprecated Use testConnection() instead
+   */
+  async testConnectionLegacy(): Promise<{ success: boolean; tableCount?: number; error?: string }> {
+    console.warn('Warning: testConnectionLegacy is deprecated. Use testConnection() instead.');
+
+    try {
+      const success = await this.testConnection();
+
+      if (success) {
+        // Get table count for legacy compatibility
+        const tables = await this.listTables();
+        return {
+          success: true,
+          tableCount: tables.length
+        };
+      } else {
+        return {
+          success: false,
+          error: 'Connection test failed'
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: ErrorHandler.getUserMessage(error)
+      };
+    }
+  }
+
+  /**
+   * Legacy get table metadata method for backward compatibility
+   * @deprecated Use getRowCount() and getMaxTimestamp() instead
+   */
+  async getTableMetadata(
+    tableName: string,
+    timestampColumn: string = 'updated_at'
+  ): Promise<{ rowCount: number; lastUpdate?: Date }> {
+    console.warn('Warning: getTableMetadata is deprecated. Use getRowCount() and getMaxTimestamp() instead.');
+
+    try {
+      const rowCount = await this.getRowCount(tableName);
+      const lastUpdate = await this.getMaxTimestamp(tableName, timestampColumn);
+
+      return {
+        rowCount,
+        lastUpdate: lastUpdate || undefined
+      };
+    } catch (error) {
+      throw new QueryError(
+        'Failed to get table metadata',
+        'metadata_query',
+        tableName,
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  /**
+   * Legacy query method for backward compatibility
+   * @deprecated Direct SQL queries are not allowed for security reasons
+   */
+  async query<T = unknown>(sql: string): Promise<T[]> {
+    throw new Error(
+      'Direct SQL queries are not allowed for security reasons. Use specific methods like getRowCount(), getMaxTimestamp(), etc.'
+    );
+  }
+
+  /**
+   * Get BigQuery project ID
+   */
+  getProjectId(): string {
+    return this.projectId;
+  }
+
+  /**
+   * Set BigQuery location/region
+   */
+  setLocation(location: string): void {
+    this.location = location;
+  }
+
+  /**
+   * Get current BigQuery location/region
+   */
+  getLocation(): string {
+    return this.location;
   }
 }

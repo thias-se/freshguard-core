@@ -1,235 +1,314 @@
 /**
- * Snowflake connector
- * Handles connections to Snowflake data warehouse
+ * Secure Snowflake connector for FreshGuard Core
+ * Extends BaseConnector with security built-in
  *
  * @module @thias-se/freshguard-core/connectors/snowflake
  */
 
 import * as snowflake from 'snowflake-sdk';
+import { BaseConnector } from './base-connector.js';
+import type { ConnectorConfig, TableSchema } from '../types/connector.js';
 import type { SourceCredentials } from '../types.js';
+import {
+  ConnectionError,
+  TimeoutError,
+  QueryError,
+  ConfigurationError,
+  SecurityError,
+  ErrorHandler
+} from '../errors/index.js';
+import { validateDatabaseIdentifier } from '../validators/index.js';
 
 /**
- * Snowflake connector
- * Connects to Snowflake data warehouse using username/password or other auth methods
+ * Secure Snowflake connector
+ *
+ * Features:
+ * - SQL injection prevention
+ * - Credential validation
+ * - Read-only query patterns
+ * - Connection timeouts
+ * - Secure error handling
  */
-export class SnowflakeConnector {
+export class SnowflakeConnector extends BaseConnector {
   private connection: snowflake.Connection | null = null;
+  private account: string = '';
+  private warehouse: string = '';
   private database: string = '';
-  private schema: string = '';
+  private schema: string = 'PUBLIC';
+  private connected: boolean = false;
+
+  constructor(config: ConnectorConfig) {
+    // Validate Snowflake-specific configuration
+    SnowflakeConnector.validateSnowflakeConfig(config);
+    super(config);
+
+    // Extract account from host
+    this.account = this.extractAccount(config.host);
+    this.database = config.database;
+  }
 
   /**
-   * Connect to Snowflake
-   *
-   * @param credentials - Connection credentials
+   * Validate Snowflake-specific configuration
    */
-  async connect(credentials: SourceCredentials): Promise<void> {
-    const options = credentials.additionalOptions || {};
-
-    // Extract required connection parameters
-    if (!credentials.host || !credentials.username || !credentials.password) {
-      throw new Error('Missing required Snowflake credentials (host, username, password)');
+  private static validateSnowflakeConfig(config: ConnectorConfig): void {
+    if (!config.host) {
+      throw new ConfigurationError('Host is required for Snowflake (format: account.snowflakecomputing.com)');
     }
 
-    // Extract account from host or additional options
-    let account = options.account as string;
-    if (!account) {
-      // Try to extract account from host (e.g., myaccount.snowflakecomputing.com -> myaccount)
-      if (credentials.host) {
-        const hostMatch = credentials.host.match(/^([^.]+)\.snowflakecomputing\.com$/);
-        if (hostMatch && hostMatch[1]) {
-          account = hostMatch[1];
-        } else {
-          throw new Error('Could not determine Snowflake account. Provide in additionalOptions.account or use format: account.snowflakecomputing.com for host');
-        }
-      } else {
-        throw new Error('Could not determine Snowflake account. Provide in additionalOptions.account or use format: account.snowflakecomputing.com for host');
-      }
+    if (!config.username || !config.password) {
+      throw new ConfigurationError('Username and password are required for Snowflake');
     }
 
-    // Set database and schema for later use
-    this.database = credentials.database || (options.database as string) || '';
-    this.schema = (options.schema as string) || 'PUBLIC';
+    if (!config.database) {
+      throw new ConfigurationError('Database is required for Snowflake');
+    }
 
-    try {
-      const connectionOptions: snowflake.ConnectionOptions = {
-        account,
-        username: credentials.username,
-        password: credentials.password,
-        database: this.database,
-        schema: this.schema,
-        warehouse: (options.warehouse as string) || undefined,
-        role: (options.role as string) || undefined,
-        authenticator: (options.authenticator as string) || 'SNOWFLAKE',
-        timeout: 30000, // 30 second timeout
-      };
-
-      // Create connection and connect
-      this.connection = snowflake.createConnection(connectionOptions);
-
-      // Connect using promises
-      await new Promise<void>((resolve, reject) => {
-        this.connection!.connect((err) => {
-          if (err) {
-            reject(new Error(`Failed to connect to Snowflake: ${err.message}`));
-          } else {
-            resolve();
-          }
-        });
-      });
-    } catch (error) {
-      throw new Error(`Failed to connect to Snowflake: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    // Validate host format
+    if (!config.host.includes('.snowflakecomputing.com')) {
+      throw new ConfigurationError('Invalid Snowflake host format (expected: account.snowflakecomputing.com)');
     }
   }
 
   /**
-   * Test connection by executing a simple query
-   *
-   * @returns Connection test result
+   * Extract Snowflake account from host
    */
-  async testConnection(): Promise<{ success: boolean; tableCount?: number; error?: string }> {
-    if (!this.connection) {
-      throw new Error('Not connected. Call connect() first.');
+  private extractAccount(host: string): string {
+    const hostMatch = host.match(/^([^.]+)\.snowflakecomputing\.com$/);
+    if (hostMatch && hostMatch[1]) {
+      return hostMatch[1];
+    }
+    throw new ConfigurationError('Could not extract Snowflake account from host');
+  }
+
+  /**
+   * Connect to Snowflake with security validation
+   */
+  private async connect(): Promise<void> {
+    if (this.connected && this.connection) {
+      return; // Already connected
     }
 
     try {
-      // Test connection with a simple query
-      await this.executeQuery('SELECT 1 as test');
+      const connectionOptions: snowflake.ConnectionOptions = {
+        account: this.account,
+        username: this.config.username,
+        password: this.config.password,
+        database: this.database,
+        schema: this.schema,
+        warehouse: this.warehouse || undefined,
+        authenticator: 'SNOWFLAKE', // Force standard auth for security
+        timeout: this.connectionTimeout, // Connection timeout
+        networkTimeout: this.connectionTimeout, // Network timeout
+      };
 
-      // Get table count for current database/schema
-      let tableCountQuery = `
-        SELECT COUNT(*) as count
-        FROM INFORMATION_SCHEMA.TABLES
-        WHERE table_schema = '${this.schema.toUpperCase()}'
-      `;
+      // Create connection
+      this.connection = snowflake.createConnection(connectionOptions);
 
-      // If no database is specified, count all tables the user has access to
-      if (!this.database) {
-        tableCountQuery = `
-          SELECT COUNT(*) as count
-          FROM INFORMATION_SCHEMA.TABLES
-        `;
+      // Connect with timeout protection
+      await this.executeWithTimeout(
+        () => new Promise<void>((resolve, reject) => {
+          this.connection!.connect((err) => {
+            if (err) {
+              reject(new Error(`Snowflake connection failed: ${err.message}`));
+            } else {
+              resolve();
+            }
+          });
+        }),
+        this.connectionTimeout
+      );
+
+      this.connected = true;
+    } catch (error) {
+      if (error instanceof TimeoutError) {
+        throw error;
       }
 
-      const tableCountResult = await this.executeQuery(tableCountQuery);
-      const tableCount = parseInt(tableCountResult[0]?.COUNT || '0', 10);
+      throw new ConnectionError(
+        'Failed to connect to Snowflake',
+        this.config.host,
+        this.config.port,
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
 
-      return {
-        success: true,
-        tableCount,
-      };
+  /**
+   * Execute a validated SQL query with security measures
+   */
+  protected async executeQuery(sql: string): Promise<any[]> {
+    await this.connect();
+
+    if (!this.connection) {
+      throw new ConnectionError('Snowflake connection not available');
+    }
+
+    try {
+      const result = await this.executeWithTimeout(
+        () => new Promise<any[]>((resolve, reject) => {
+          this.connection!.execute({
+            sqlText: sql,
+            complete: (err, _stmt, rows) => {
+              if (err) {
+                reject(new Error(`Query execution failed: ${err.message}`));
+              } else {
+                resolve(rows || []);
+              }
+            }
+          });
+        }),
+        this.queryTimeout
+      );
+
+      // Validate result size for security
+      this.validateResultSize(result);
+
+      return result;
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
+      if (error instanceof TimeoutError) {
+        throw error;
+      }
+
+      // Sanitize and re-throw as QueryError
+      throw new QueryError(
+        ErrorHandler.getUserMessage(error),
+        'query_execution',
+        undefined,
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  /**
+   * Test database connection with security validation
+   */
+  async testConnection(): Promise<boolean> {
+    try {
+      await this.connect();
+
+      if (!this.connection) {
+        return false;
+      }
+
+      // Test with a simple, safe query
+      const sql = 'SELECT 1 as test';
+      this.validateQuery(sql);
+
+      await this.executeQuery(sql);
+
+      return true;
+    } catch (error) {
+      // Don't throw - this method should return boolean
+      return false;
     }
   }
 
   /**
    * List all tables in the database/schema
-   *
-   * @returns Array of table names
    */
   async listTables(): Promise<string[]> {
-    if (!this.connection) {
-      throw new Error('Not connected. Call connect() first.');
-    }
+    const sql = `
+      SELECT table_name
+      FROM INFORMATION_SCHEMA.TABLES
+      WHERE table_schema = '${this.schema.toUpperCase()}'
+        AND table_type = 'BASE TABLE'
+      ORDER BY table_name
+      LIMIT ${this.maxRows}
+    `;
+
+    this.validateQuery(sql);
 
     try {
-      let query = `
-        SELECT table_name
-        FROM INFORMATION_SCHEMA.TABLES
-        WHERE table_schema = '${this.schema.toUpperCase()}'
-        ORDER BY table_name
-      `;
-
-      // If no database is specified, get tables from all schemas
-      if (!this.database) {
-        query = `
-          SELECT CONCAT(table_schema, '.', table_name) as table_name
-          FROM INFORMATION_SCHEMA.TABLES
-          ORDER BY table_schema, table_name
-        `;
-      }
-
-      const result = await this.executeQuery(query);
-      return result.map((row: any) => row.TABLE_NAME || row.table_name);
+      const result = await this.executeQuery(sql);
+      return result.map((row: any) => row.TABLE_NAME).filter(Boolean);
     } catch (error) {
-      throw new Error(`Failed to list tables: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new QueryError(
+        'Failed to list tables',
+        'table_listing',
+        undefined,
+        error instanceof Error ? error : undefined
+      );
     }
   }
 
   /**
-   * Get table metadata (row count, last update)
-   *
-   * @param tableName - Name of the table (can be just table or schema.table or database.schema.table)
-   * @param timestampColumn - Column to check for last update
-   * @returns Table metadata
+   * Get table schema information securely
    */
-  async getTableMetadata(
-    tableName: string,
-    timestampColumn: string = 'UPDATED_AT'
-  ): Promise<{ rowCount: number; lastUpdate?: Date }> {
-    if (!this.connection) {
-      throw new Error('Not connected. Call connect() first.');
-    }
+  async getTableSchema(table: string): Promise<TableSchema> {
+    const parsedTable = this.parseTableName(table);
+    const tableNameUpper = parsedTable.split('.').pop()?.toUpperCase();
+
+    const sql = `
+      SELECT
+        column_name,
+        data_type,
+        is_nullable
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE table_name = '${tableNameUpper}'
+        AND table_schema = '${this.schema.toUpperCase()}'
+      ORDER BY ordinal_position
+      LIMIT ${this.maxRows}
+    `;
+
+    this.validateQuery(sql);
 
     try {
-      // Parse and qualify table name
-      const fullTableName = this.parseTableName(tableName);
+      const result = await this.executeQuery(sql);
 
-      // Get row count and last update time
-      const query = `
-        SELECT
-          COUNT(*) as row_count,
-          MAX(${timestampColumn}) as last_update
-        FROM ${fullTableName}
-      `;
-
-      const result = await this.executeQuery(query);
-      const row = result[0];
+      if (result.length === 0) {
+        throw QueryError.tableNotFound(table);
+      }
 
       return {
-        rowCount: parseInt(row?.ROW_COUNT || '0', 10),
-        lastUpdate: row?.LAST_UPDATE ? new Date(row.LAST_UPDATE) : undefined,
+        table,
+        columns: result.map(row => ({
+          name: row.COLUMN_NAME,
+          type: this.mapSnowflakeType(row.DATA_TYPE),
+          nullable: row.IS_NULLABLE === 'YES'
+        }))
       };
     } catch (error) {
-      // If the timestamp column doesn't exist, try to get just the row count
-      try {
-        const fullTableName = this.parseTableName(tableName);
-        const countQuery = `SELECT COUNT(*) as row_count FROM ${fullTableName}`;
-        const result = await this.executeQuery(countQuery);
+      if (error instanceof QueryError) {
+        throw error;
+      }
 
-        return {
-          rowCount: parseInt(result[0]?.ROW_COUNT || '0', 10),
-          lastUpdate: undefined,
-        };
+      throw new QueryError(
+        'Failed to get table schema',
+        'schema_query',
+        table,
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  /**
+   * Get last modified timestamp for Snowflake tables
+   */
+  async getLastModified(table: string): Promise<Date | null> {
+    // Try common timestamp columns (Snowflake uses uppercase by default)
+    const timestampColumns = [
+      'UPDATED_AT', 'MODIFIED_AT', 'LAST_MODIFIED', 'TIMESTAMP',
+      'CREATED_AT', 'DATE_MODIFIED', 'LAST_UPDATE'
+    ];
+
+    for (const column of timestampColumns) {
+      try {
+        const result = await this.getMaxTimestamp(table, column);
+        if (result) {
+          return result;
+        }
       } catch {
-        throw new Error(`Failed to get table metadata: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        // Column doesn't exist, try next one
+        continue;
       }
     }
+
+    // Snowflake doesn't have built-in table modification timestamps
+    return null;
   }
 
   /**
-   * Execute a custom SQL query
-   *
-   * @param query - SQL query to execute
-   * @returns Query result
-   */
-  async query<T = unknown>(query: string): Promise<T[]> {
-    if (!this.connection) {
-      throw new Error('Not connected. Call connect() first.');
-    }
-
-    try {
-      return await this.executeQuery(query) as T[];
-    } catch (error) {
-      throw new Error(`Query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  /**
-   * Close the connection
+   * Close the Snowflake connection
    */
   async close(): Promise<void> {
     if (this.connection) {
@@ -237,78 +316,233 @@ export class SnowflakeConnector {
         await new Promise<void>((resolve) => {
           this.connection!.destroy((err) => {
             if (err) {
-              console.warn(`Warning during Snowflake connection close: ${err.message}`);
+              console.warn('Warning: Error closing Snowflake connection:', ErrorHandler.getUserMessage(err));
             }
             resolve();
           });
         });
       } catch (error) {
-        console.warn(`Warning during Snowflake connection close: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        console.warn('Warning: Error closing Snowflake connection:', ErrorHandler.getUserMessage(error));
       } finally {
         this.connection = null;
-        this.database = '';
-        this.schema = '';
+        this.connected = false;
       }
     }
   }
 
   /**
-   * Execute a SQL query using the Snowflake connection
-   *
-   * @private
-   * @param query - SQL query to execute
-   * @returns Promise resolving to query results
+   * Map Snowflake data types to standard types
    */
-  private async executeQuery(query: string): Promise<any[]> {
-    if (!this.connection) {
-      throw new Error('Not connected');
-    }
+  private mapSnowflakeType(snowflakeType: string): string {
+    const typeMap: Record<string, string> = {
+      'NUMBER': 'decimal',
+      'DECIMAL': 'decimal',
+      'NUMERIC': 'decimal',
+      'INT': 'integer',
+      'INTEGER': 'integer',
+      'BIGINT': 'bigint',
+      'SMALLINT': 'integer',
+      'TINYINT': 'integer',
+      'BYTEINT': 'integer',
+      'FLOAT': 'float',
+      'FLOAT4': 'float',
+      'FLOAT8': 'float',
+      'DOUBLE': 'float',
+      'DOUBLE PRECISION': 'float',
+      'REAL': 'float',
+      'VARCHAR': 'text',
+      'CHAR': 'text',
+      'CHARACTER': 'text',
+      'STRING': 'text',
+      'TEXT': 'text',
+      'BINARY': 'binary',
+      'VARBINARY': 'binary',
+      'BOOLEAN': 'boolean',
+      'DATE': 'date',
+      'DATETIME': 'timestamp',
+      'TIME': 'time',
+      'TIMESTAMP': 'timestamp',
+      'TIMESTAMP_LTZ': 'timestamptz',
+      'TIMESTAMP_NTZ': 'timestamp',
+      'TIMESTAMP_TZ': 'timestamptz',
+      'VARIANT': 'json',
+      'OBJECT': 'json',
+      'ARRAY': 'array',
+      'GEOGRAPHY': 'geography',
+      'GEOMETRY': 'geometry'
+    };
 
-    return new Promise((resolve, reject) => {
-      this.connection!.execute({
-        sqlText: query,
-        complete: (err, _stmt, rows) => {
-          if (err) {
-            reject(new Error(`Query execution failed: ${err.message}`));
-          } else {
-            resolve(rows || []);
-          }
-        }
-      });
-    });
+    return typeMap[snowflakeType.toUpperCase()] || 'unknown';
   }
 
   /**
-   * Parse table name to ensure proper qualification
-   *
-   * @private
-   * @param tableName - Input table name
-   * @returns Fully qualified table name
+   * Parse and validate table name for Snowflake
    */
   private parseTableName(tableName: string): string {
+    validateDatabaseIdentifier(tableName, 'table');
+
     const parts = tableName.split('.');
 
     if (parts.length === 3) {
-      // Already fully qualified: database.schema.table
+      // database.schema.table format
+      const [database, schema, table] = parts;
+
+      // Validate database matches
+      if (database.toUpperCase() !== this.database.toUpperCase()) {
+        throw new SecurityError('Table database does not match configured database');
+      }
+
       return tableName.toUpperCase();
     } else if (parts.length === 2) {
       // schema.table format
-      if (this.database) {
-        return `${this.database}.${tableName}`.toUpperCase();
-      } else {
-        return tableName.toUpperCase();
-      }
+      return `${this.database}.${tableName}`.toUpperCase();
     } else if (parts.length === 1) {
       // Just table name
-      if (this.database && this.schema) {
-        return `${this.database}.${this.schema}.${tableName}`.toUpperCase();
-      } else if (this.schema) {
-        return `${this.schema}.${tableName}`.toUpperCase();
-      } else {
-        return tableName.toUpperCase();
-      }
+      return `${this.database}.${this.schema}.${tableName}`.toUpperCase();
     } else {
-      throw new Error(`Invalid table name format: '${tableName}'. Expected: table, schema.table, or database.schema.table`);
+      throw new QueryError('Invalid table name format', 'invalid_table_name');
     }
+  }
+
+  // ==============================================
+  // Legacy API compatibility methods
+  // ==============================================
+
+  /**
+   * Legacy connect method for backward compatibility
+   * @deprecated Use constructor with ConnectorConfig instead
+   */
+  async connectLegacy(credentials: SourceCredentials): Promise<void> {
+    console.warn('Warning: connectLegacy is deprecated. Use constructor with ConnectorConfig instead.');
+
+    if (!credentials.host || !credentials.username || !credentials.password) {
+      throw new ConfigurationError('Missing required Snowflake credentials');
+    }
+
+    const options = credentials.additionalOptions || {};
+
+    const config: ConnectorConfig = {
+      host: credentials.host,
+      port: 443,
+      database: credentials.database || (options.database as string) || '',
+      username: credentials.username,
+      password: credentials.password,
+      ssl: true
+    };
+
+    // Set optional fields
+    this.warehouse = (options.warehouse as string) || '';
+    this.schema = (options.schema as string) || 'PUBLIC';
+
+    // Validate and reconnect
+    SnowflakeConnector.validateSnowflakeConfig(config);
+    this.config = { ...this.config, ...config };
+    this.account = this.extractAccount(config.host);
+    this.database = config.database;
+    await this.connect();
+  }
+
+  /**
+   * Legacy test connection method for backward compatibility
+   * @deprecated Use testConnection() instead
+   */
+  async testConnectionLegacy(): Promise<{ success: boolean; tableCount?: number; error?: string }> {
+    console.warn('Warning: testConnectionLegacy is deprecated. Use testConnection() instead.');
+
+    try {
+      const success = await this.testConnection();
+
+      if (success) {
+        // Get table count for legacy compatibility
+        const tables = await this.listTables();
+        return {
+          success: true,
+          tableCount: tables.length
+        };
+      } else {
+        return {
+          success: false,
+          error: 'Connection test failed'
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: ErrorHandler.getUserMessage(error)
+      };
+    }
+  }
+
+  /**
+   * Legacy get table metadata method for backward compatibility
+   * @deprecated Use getRowCount() and getMaxTimestamp() instead
+   */
+  async getTableMetadata(
+    tableName: string,
+    timestampColumn: string = 'UPDATED_AT'
+  ): Promise<{ rowCount: number; lastUpdate?: Date }> {
+    console.warn('Warning: getTableMetadata is deprecated. Use getRowCount() and getMaxTimestamp() instead.');
+
+    try {
+      const rowCount = await this.getRowCount(tableName);
+      const lastUpdate = await this.getMaxTimestamp(tableName, timestampColumn);
+
+      return {
+        rowCount,
+        lastUpdate: lastUpdate || undefined
+      };
+    } catch (error) {
+      throw new QueryError(
+        'Failed to get table metadata',
+        'metadata_query',
+        tableName,
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  /**
+   * Legacy query method for backward compatibility
+   * @deprecated Direct SQL queries are not allowed for security reasons
+   */
+  async query<T = unknown>(sql: string): Promise<T[]> {
+    throw new Error(
+      'Direct SQL queries are not allowed for security reasons. Use specific methods like getRowCount(), getMaxTimestamp(), etc.'
+    );
+  }
+
+  /**
+   * Get Snowflake account name
+   */
+  getAccount(): string {
+    return this.account;
+  }
+
+  /**
+   * Set Snowflake warehouse
+   */
+  setWarehouse(warehouse: string): void {
+    this.warehouse = warehouse;
+  }
+
+  /**
+   * Get current warehouse
+   */
+  getWarehouse(): string {
+    return this.warehouse;
+  }
+
+  /**
+   * Set schema
+   */
+  setSchema(schema: string): void {
+    this.schema = schema;
+  }
+
+  /**
+   * Get current schema
+   */
+  getSchema(): string {
+    return this.schema;
   }
 }
