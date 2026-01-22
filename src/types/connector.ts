@@ -137,6 +137,15 @@ export interface SecurityConfig {
 
   /** Enable detailed logging for debugging */
   enableDetailedLogging?: boolean;
+
+  /** Enable query complexity analysis */
+  enableQueryAnalysis?: boolean;
+
+  /** Maximum query risk score to allow (0-100) */
+  maxQueryRiskScore?: number;
+
+  /** Maximum query complexity score to allow (0-100) */
+  maxQueryComplexityScore?: number;
 }
 
 /**
