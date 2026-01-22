@@ -212,9 +212,8 @@ export class SnowflakeConnector extends BaseConnector {
         return false;
       }
 
-      // Test with a simple, safe query
+      // Test with a simple, safe query (skip validation for connection test)
       const sql = 'SELECT 1 as test';
-      this.validateQuery(sql);
 
       await this.executeQuery(sql);
 

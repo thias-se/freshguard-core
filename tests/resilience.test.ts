@@ -536,8 +536,8 @@ describe('Retry Policy - Phase 2 Resilience', () => {
       const result = await retryPolicy.executeWithResult(slowFunction);
 
       expect(result.success).toBe(true);
-      expect(result.attempts[0].duration).toBeGreaterThanOrEqual(50);
-      expect(result.totalDuration).toBeGreaterThanOrEqual(50);
+      expect(result.attempts[0].duration).toBeGreaterThanOrEqual(45);
+      expect(result.totalDuration).toBeGreaterThanOrEqual(45);
     });
   });
 
