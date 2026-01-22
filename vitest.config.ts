@@ -5,6 +5,9 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
+    // Increase timeout for integration tests with external services
+    testTimeout: 30000,
+    hookTimeout: 10000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
@@ -24,5 +27,12 @@ export default defineConfig({
       //   statements: 40, // Slightly below current 44.32%
       // },
     },
+    // Environment variables for integration tests
+    env: {
+      TEST_POSTGRES_URL: 'postgresql://test:test@localhost:5433/freshguard_test',
+      TEST_SKIP_INTEGRATION: process.env.TEST_SKIP_INTEGRATION || 'false',
+    },
+    // Separate workspaces for different test types (if needed in the future)
+    // workspace: 'vitest.workspace.ts',
   },
 });

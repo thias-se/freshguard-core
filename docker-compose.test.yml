@@ -1,0 +1,43 @@
+
+services:
+  postgres_test:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: freshguard_test
+    ports:
+      - "5433:5432"  # Non-standard port to avoid conflicts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d freshguard_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    tmpfs:
+      - /var/lib/postgresql/data  # In-memory for faster tests
+
+  # Future: Add other databases as you expand connectors
+  # mysql_test:
+  #   image: mysql:8.0
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: test
+  #     MYSQL_DATABASE: freshguard_test
+  #     MYSQL_USER: test
+  #     MYSQL_PASSWORD: test
+  #   ports:
+  #     - "3307:3306"
+  #   healthcheck:
+  #     test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
+
+  # redis_test:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6380:6379"
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
