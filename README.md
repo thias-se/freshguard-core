@@ -112,6 +112,56 @@ if (result.status === 'alert') {
 }
 ```
 
+### 🚨 Error Handling
+
+FreshGuard Core exports comprehensive error classes for proper error handling:
+
+```typescript
+import {
+  checkFreshness,
+  PostgresConnector,
+  SecurityError,
+  ConnectionError,
+  TimeoutError,
+  QueryError,
+  ConfigurationError,
+  MonitoringError
+} from '@thias-se/freshguard-core';
+
+try {
+  const result = await checkFreshness(connector, rule);
+  console.log(`✅ Check completed: ${result.status}`);
+} catch (error) {
+  // Handle specific error types
+  if (error instanceof SecurityError) {
+    console.error('🔒 Security violation:', error.message);
+    // Log security incident, block request source
+  } else if (error instanceof ConnectionError) {
+    console.error('🔌 Database connection failed:', error.message);
+    // Retry with backoff, check network connectivity
+  } else if (error instanceof TimeoutError) {
+    console.error('⏱️ Query timeout:', error.message);
+    // Check query complexity, database performance
+  } else if (error instanceof QueryError) {
+    console.error('📊 Query execution failed:', error.message);
+    // Check table exists, column names, permissions
+  } else if (error instanceof ConfigurationError) {
+    console.error('⚙️ Configuration error:', error.message);
+    // Check environment variables, config file
+  } else if (error instanceof MonitoringError) {
+    console.error('📈 Monitoring check failed:', error.message);
+    // Check rule configuration, data availability
+  } else {
+    console.error('❌ Unknown error:', error.message);
+  }
+}
+```
+
+**Error Properties:**
+- `error.code` - Machine-readable error code (e.g., "SECURITY_VIOLATION")
+- `error.timestamp` - When the error occurred
+- `error.sanitized` - Whether error message is safe for user display
+
 ## Features
 
 ### 📊 Monitoring
@@ -275,14 +325,27 @@ const connector = new PostgresConnector({
   ssl: true,
 });
 
-// Run every 5 minutes with error handling
+// Run every 5 minutes with comprehensive error handling
 cron.schedule('*/5 * * * *', async () => {
   try {
     const result = await checkFreshness(connector, rule);
     console.log(`✅ Check result: ${result.status}`);
   } catch (error) {
-    // Errors are sanitized to prevent information disclosure
-    console.error(`❌ Monitoring failed: ${error.message}`);
+    // Import error classes for specific handling
+    const { SecurityError, ConnectionError, TimeoutError } = require('@thias-se/freshguard-core');
+
+    if (error instanceof ConnectionError) {
+      console.error(`🔌 Database connection failed: ${error.message}`);
+      // Implement reconnection logic
+    } else if (error instanceof TimeoutError) {
+      console.error(`⏱️ Query timeout: ${error.message}`);
+      // Alert ops team about performance issues
+    } else if (error instanceof SecurityError) {
+      console.error(`🔒 Security violation: ${error.message}`);
+      // Log security incident for investigation
+    } else {
+      console.error(`❌ Monitoring failed: ${error.message}`);
+    }
   }
 });
 ```
@@ -308,14 +371,36 @@ cosign verify-blob --certificate freshguard-core.tgz.crt --signature freshguard-
 ### Security-First Connectors
 
 ```typescript
-// Import secure connectors
+// Import secure connectors and error classes
 import {
   PostgresConnector,
   DuckDBConnector,
   BigQueryConnector,
-  SnowflakeConnector
+  SnowflakeConnector,
+  SecurityError,
+  ConnectionError,
+  TimeoutError,
+  QueryError,
+  ConfigurationError,
+  MonitoringError
 } from '@thias-se/freshguard-core';
 ```
+
+### Error Classes
+
+FreshGuard Core provides comprehensive error handling with specific error types:
+
+- **`SecurityError`** - SQL injection attempts, invalid identifiers, blocked queries
+- **`ConnectionError`** - Database connection failures, authentication issues
+- **`TimeoutError`** - Query timeouts, connection timeouts
+- **`QueryError`** - Syntax errors, table/column not found, execution failures
+- **`ConfigurationError`** - Missing required fields, invalid configuration values
+- **`MonitoringError`** - Freshness check failures, volume anomaly detection errors
+
+All errors include:
+- `error.code` - Machine-readable error code
+- `error.timestamp` - Error occurrence timestamp
+- `error.sanitized` - Whether the message is safe for user display
 
 ### `checkFreshness(connector, rule)`
 

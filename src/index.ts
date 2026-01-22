@@ -18,6 +18,19 @@ export { PostgresConnector, DuckDBConnector } from './connectors/index.js';
 export { createDatabase, schema } from './db/index.js';
 export type { Database } from './db/index.js';
 
+// Export error classes for proper error handling
+export {
+  FreshGuardError,
+  SecurityError,
+  ConnectionError,
+  TimeoutError,
+  QueryError,
+  ConfigurationError,
+  MonitoringError,
+  ErrorHandler,
+  createError
+} from './errors/index.js';
+
 // Re-export types for convenience
 export type {
   DataSource,
