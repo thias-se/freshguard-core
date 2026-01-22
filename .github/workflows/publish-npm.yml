@@ -421,14 +421,20 @@ jobs:
         run: |
           mkdir test-install
           cd test-install
-          pnpm init -y
+          echo '{"name":"test-install","version":"1.0.0","type":"module"}' > package.json
 
           echo "Testing published packages..."
           pnpm install @thias-se/freshguard-core@${{ needs.publish.outputs.version }}
 
           node -e "
-            const { checkFreshness, createDatabase, DataSourceType } = require('@thias-se/freshguard-core');
-            console.log('✅ Published package works correctly');
+            import('@thias-se/freshguard-core').then(({ checkFreshness, createDatabase, DataSourceType }) => {
+              console.log('✅ Published package works correctly');
+              console.log('✅ checkFreshness:', typeof checkFreshness);
+              console.log('✅ createDatabase:', typeof createDatabase);
+            }).catch(err => {
+              console.error('❌ Failed to import package:', err.message);
+              process.exit(1);
+            });
           "
         env:
           version: ${{ needs.publish.outputs.version }}
