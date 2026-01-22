@@ -80,7 +80,7 @@ export const TableNameSchema = z.string()
   }))
   .refine((name) => {
     // Additional security check - ensure no dangerous patterns
-    return !name.match(/[;\/\*\x00-\x1F\x7F]|--/);
+    return !(/[;\/\*\x00-\x1F\x7F]|--/.exec(name));
   }, 'Table name contains dangerous characters');
 
 /**
@@ -175,7 +175,7 @@ export const DatabaseCredentialsSchema = z.object({
     .max(64, 'Username too long (max 64 characters)')
     .refine((username) => {
       // Prevent obvious injection attempts in username
-      return !username.match(/[;\/\*\x00-\x1F\x7F]|--/);
+      return !(/[;\/\*\x00-\x1F\x7F]|--/.exec(username));
     }, 'Username contains invalid characters'),
 
   password: z.string()

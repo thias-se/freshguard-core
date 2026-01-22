@@ -8,8 +8,10 @@
  * @license MIT
  */
 
-import { StructuredLogger, createComponentLogger, LogContext } from '../observability/logger.js';
-import { MetricsCollector, createComponentMetrics } from '../observability/metrics.js';
+import type { StructuredLogger} from '../observability/logger.js';
+import { createComponentLogger, LogContext } from '../observability/logger.js';
+import type { MetricsCollector} from '../observability/metrics.js';
+import { createComponentMetrics } from '../observability/metrics.js';
 
 // ==============================================
 // Types and Interfaces
@@ -176,7 +178,7 @@ export const API_RETRY_CONFIG: RetryConfig = {
   retryCondition: (error: Error, attempt: number) => {
     // Only retry on 5xx server errors, not 4xx client errors
     if (error.message.includes('status')) {
-      const statusMatch = error.message.match(/status\s+(\d+)/i);
+      const statusMatch = /status\s+(\d+)/i.exec(error.message);
       if (statusMatch) {
         const status = parseInt(statusMatch[1]);
         return status >= 500 && status < 600;
@@ -298,10 +300,10 @@ async function executeWithTimeout<T>(
  * Retry Policy with exponential backoff, comprehensive configuration, and integrated observability
  */
 export class RetryPolicy {
-  private config: Required<Omit<RetryConfig, 'logger' | 'metrics'>>;
-  private logger: StructuredLogger;
-  private metrics: MetricsCollector;
-  private enableDetailedLogging: boolean;
+  private readonly config: Required<Omit<RetryConfig, 'logger' | 'metrics'>>;
+  private readonly logger: StructuredLogger;
+  private readonly metrics: MetricsCollector;
+  private readonly enableDetailedLogging: boolean;
   private stats: RetryStats = {
     totalExecutions: 0,
     successfulExecutions: 0,
@@ -672,7 +674,7 @@ export async function executeWithApiRetry<T>(
  * Registry for managing multiple retry policies
  */
 export class RetryPolicyRegistry {
-  private policies = new Map<string, RetryPolicy>();
+  private readonly policies = new Map<string, RetryPolicy>();
 
   /**
    * Register a retry policy

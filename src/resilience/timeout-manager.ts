@@ -116,12 +116,12 @@ export class OperationCancelledError extends Error {
  * Timeout Manager with AbortController-based cancellation
  */
 export class TimeoutManager {
-  private controller: AbortController;
+  private readonly controller: AbortController;
   private timeoutId: NodeJS.Timeout | null = null;
-  private config: Required<TimeoutConfig>;
+  private readonly config: Required<TimeoutConfig>;
   private startTime: Date | null = null;
   private endTime: Date | null = null;
-  private children = new Set<TimeoutManager>();
+  private readonly children = new Set<TimeoutManager>();
   private timeoutFired = false; // Track if timeout was the cause of abort
   private stats: TimeoutStats = {
     totalExecutions: 0,
@@ -475,8 +475,8 @@ export class TimeoutManager {
  * Registry for managing multiple timeout managers
  */
 export class TimeoutRegistry {
-  private timeouts = new Map<string, TimeoutManager>();
-  private activeTimeouts = new Map<string, ActiveTimeout>();
+  private readonly timeouts = new Map<string, TimeoutManager>();
+  private readonly activeTimeouts = new Map<string, ActiveTimeout>();
 
   /**
    * Create and register a timeout manager

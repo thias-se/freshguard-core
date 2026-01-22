@@ -59,7 +59,7 @@ export async function checkFreshness(
       'Freshness check query timeout'
     );
 
-    if (!queryResult || !queryResult.row) {
+    if (!queryResult?.row) {
       throw new QueryError('Query returned no results', 'freshness_query', rule.tableName);
     }
 

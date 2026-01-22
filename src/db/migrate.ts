@@ -31,8 +31,8 @@ async function getAvailableMigrations(): Promise<Migration[]> {
   const migrations: Migration[] = [];
 
   for (const filename of migrationFiles) {
-    const match = filename.match(/^(\d+)_(.+)\.sql$/);
-    if (!match || !match[1] || !match[2]) continue;
+    const match = /^(\d+)_(.+)\.sql$/.exec(filename);
+    if (!match?.[1] || !match[2]) continue;
 
     const version = parseInt(match[1], 10);
     const name = match[2].replace(/_/g, ' ');

@@ -255,9 +255,9 @@ function createTimingTracker(): {
  * Structured logger with context preservation and sensitive data sanitization
  */
 export class StructuredLogger {
-  private logger: PinoLogger;
-  private config: Required<LoggerConfig>;
-  private baseContext: Record<string, any>;
+  private readonly logger: PinoLogger;
+  private readonly config: Required<LoggerConfig>;
+  private readonly baseContext: Record<string, any>;
 
   constructor(config: LoggerConfig = {}) {
     this.config = {

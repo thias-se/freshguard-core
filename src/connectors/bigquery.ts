@@ -31,9 +31,9 @@ import { validateDatabaseIdentifier } from '../validators/index.js';
  */
 export class BigQueryConnector extends BaseConnector {
   private client: BigQuery | null = null;
-  private projectId: string = '';
-  private location: string = 'US';
-  private connected: boolean = false;
+  private projectId = '';
+  private location = 'US';
+  private connected = false;
 
   constructor(config: ConnectorConfig, securityConfig?: Partial<SecurityConfig>) {
     // Validate BigQuery-specific configuration
@@ -156,7 +156,7 @@ export class BigQueryConnector extends BaseConnector {
     try {
       // Convert positional parameters ($1, $2, etc.) to BigQuery named parameters (@param1, @param2, etc.)
       let finalSql = sql;
-      const namedParams: { [key: string]: any } = {};
+      const namedParams: Record<string, any> = {};
 
       if (parameters.length > 0) {
         for (let i = 0; i < parameters.length; i++) {
@@ -514,7 +514,7 @@ export class BigQueryConnector extends BaseConnector {
    */
   async getTableMetadata(
     tableName: string,
-    timestampColumn: string = 'updated_at'
+    timestampColumn = 'updated_at'
   ): Promise<{ rowCount: number; lastUpdate?: Date }> {
     console.warn('Warning: getTableMetadata is deprecated. Use getRowCount() and getMaxTimestamp() instead.');
 

@@ -144,7 +144,7 @@ async function handleInit(): Promise<void> {
   console.log('🚀 FreshGuard Init\n');
 
   // Security: Get database URL from environment or prompt securely
-  let dbUrl = process.env.FRESHGUARD_DATABASE_URL;
+  const dbUrl = process.env.FRESHGUARD_DATABASE_URL;
   let dbType: ConnectorType = 'postgres';
 
   if (!dbUrl) {

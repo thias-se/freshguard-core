@@ -5,7 +5,8 @@
  * @module @thias-se/freshguard-core/connectors/duckdb
  */
 
-import { DuckDBInstance, DuckDBConnection } from '@duckdb/node-api';
+import type { DuckDBConnection } from '@duckdb/node-api';
+import { DuckDBInstance } from '@duckdb/node-api';
 import { BaseConnector } from './base-connector.js';
 import type { ConnectorConfig, TableSchema, SecurityConfig } from '../types/connector.js';
 import type { SourceCredentials } from '../types.js';
@@ -33,8 +34,8 @@ import { resolve } from 'path';
 export class DuckDBConnector extends BaseConnector {
   private instance: DuckDBInstance | null = null;
   private connection: DuckDBConnection | null = null;
-  private databasePath: string = '';
-  private connected: boolean = false;
+  private databasePath = '';
+  private connected = false;
 
   constructor(config: ConnectorConfig, securityConfig?: Partial<SecurityConfig>) {
     // Validate DuckDB-specific configuration
@@ -452,7 +453,7 @@ export class DuckDBConnector extends BaseConnector {
    */
   async getTableMetadata(
     tableName: string,
-    timestampColumn: string = 'updated_at'
+    timestampColumn = 'updated_at'
   ): Promise<{ rowCount: number; lastUpdate?: Date }> {
     console.warn('Warning: getTableMetadata is deprecated. Use getRowCount() and getMaxTimestamp() instead.');
 

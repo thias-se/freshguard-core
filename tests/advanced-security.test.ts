@@ -4,19 +4,22 @@
  */
 
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
+import type {
   QueryComplexityAnalyzer,
-  createQueryAnalyzer,
-  createSecurityAnalyzer,
-  createPerformanceAnalyzer,
-  QueryComplexity,
   TableMetadata
 } from '../src/security/query-analyzer.js';
 import {
+  createQueryAnalyzer,
+  createSecurityAnalyzer,
+  createPerformanceAnalyzer,
+  QueryComplexity
+} from '../src/security/query-analyzer.js';
+import type {
   SchemaCache,
+  CachedTableSchema} from '../src/security/schema-cache.js';
+import {
   createSchemaCache,
   createFastCache,
-  CachedTableSchema,
   generateStructureHash
 } from '../src/security/schema-cache.js';
 

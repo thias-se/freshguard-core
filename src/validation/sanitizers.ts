@@ -274,7 +274,7 @@ export function sanitizeUrl(input: unknown): SanitizationResult {
   const result = sanitizeString(input, urlPolicy);
 
   // Ensure URL starts with http:// or https://
-  if (result.value && !result.value.match(/^https?:\/\//i)) {
+  if (result.value && !(/^https?:\/\//i.exec(result.value))) {
     throw new Error('URL must start with http:// or https://');
   }
 

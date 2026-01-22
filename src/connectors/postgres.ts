@@ -29,7 +29,7 @@ import { validateConnectorConfig } from '../validators/index.js';
  */
 export class PostgresConnector extends BaseConnector {
   private client: ReturnType<typeof postgres> | null = null;
-  private connected: boolean = false;
+  private connected = false;
 
   constructor(config: ConnectorConfig, securityConfig?: Partial<SecurityConfig>) {
     // Validate configuration before proceeding
@@ -392,7 +392,7 @@ export class PostgresConnector extends BaseConnector {
    */
   async getTableMetadata(
     tableName: string,
-    timestampColumn: string = 'updated_at'
+    timestampColumn = 'updated_at'
   ): Promise<{ rowCount: number; lastUpdate?: Date }> {
     console.warn('Warning: getTableMetadata is deprecated. Use getRowCount() and getMaxTimestamp() instead.');
 

@@ -7,8 +7,10 @@
  * @license MIT
  */
 
-import { StructuredLogger, createComponentLogger } from '../observability/logger.js';
-import { MetricsCollector, createComponentMetrics } from '../observability/metrics.js';
+import type { StructuredLogger} from '../observability/logger.js';
+import { createComponentLogger } from '../observability/logger.js';
+import type { MetricsCollector} from '../observability/metrics.js';
+import { createComponentMetrics } from '../observability/metrics.js';
 
 // ==============================================
 // Types and Interfaces
@@ -173,10 +175,10 @@ interface CacheEntry {
  * High-performance schema cache with TTL and LRU eviction
  */
 export class SchemaCache {
-  private cache = new Map<CacheKey, CacheEntry>();
-  private config: Required<SchemaCacheConfig>;
-  private logger: StructuredLogger;
-  private metrics: MetricsCollector;
+  private readonly cache = new Map<CacheKey, CacheEntry>();
+  private readonly config: Required<SchemaCacheConfig>;
+  private readonly logger: StructuredLogger;
+  private readonly metrics: MetricsCollector;
   private cleanupTimer?: NodeJS.Timeout;
   private stats: CacheStats;
 
@@ -340,8 +342,8 @@ export class SchemaCache {
   /**
    * Get entries that need refresh
    */
-  getEntriesNeedingRefresh(): Array<{ database: string; tableName: string }> {
-    const needingRefresh: Array<{ database: string; tableName: string }> = [];
+  getEntriesNeedingRefresh(): { database: string; tableName: string }[] {
+    const needingRefresh: { database: string; tableName: string }[] = [];
 
     for (const [key, entry] of this.cache) {
       if (entry.needsRefresh) {

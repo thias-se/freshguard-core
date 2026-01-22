@@ -110,7 +110,7 @@ function sanitizeErrorValue(value: unknown): unknown {
  * Runtime validator with structured error handling and caching
  */
 export class RuntimeValidator {
-  private schemaCache = new Map<string, z.ZodSchema>();
+  private readonly schemaCache = new Map<string, z.ZodSchema>();
   private validationStats = {
     total: 0,
     successes: 0,
@@ -268,10 +268,10 @@ export class RuntimeValidator {
    */
   validateBatch<T>(schema: z.ZodSchema<T>, items: unknown[]): {
     valid: T[],
-    invalid: Array<{ index: number, errors: ValidationError[] }>
+    invalid: { index: number, errors: ValidationError[] }[]
   } {
     const valid: T[] = [];
-    const invalid: Array<{ index: number, errors: ValidationError[] }> = [];
+    const invalid: { index: number, errors: ValidationError[] }[] = [];
 
     items.forEach((item, index) => {
       const result = this.validate(schema, item);

@@ -43,11 +43,11 @@ export interface ConnectorConfig {
  */
 export interface TableSchema {
   table: string;
-  columns: Array<{
+  columns: {
     name: string;
     type: string;
     nullable: boolean;
-  }>;
+  }[];
 }
 
 /**

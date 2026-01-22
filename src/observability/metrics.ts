@@ -173,11 +173,11 @@ export interface MetricsConfig {
  * Sliding window for calculating percentiles and moving averages
  */
 class SlidingWindow {
-  private values: Array<{ value: number; timestamp: number }> = [];
+  private values: { value: number; timestamp: number }[] = [];
   private readonly windowSize: number;
   private readonly maxAge: number;
 
-  constructor(windowSize: number = 1000, maxAge: number = 60000) {
+  constructor(windowSize = 1000, maxAge = 60000) {
     this.windowSize = windowSize;
     this.maxAge = maxAge;
   }
@@ -270,7 +270,7 @@ class SlidingWindow {
  * Counter metric implementation
  */
 class Counter {
-  private value: number = 0;
+  private value = 0;
   private readonly labels: Record<string, string>;
 
   constructor(labels: Record<string, string> = {}) {
@@ -280,7 +280,7 @@ class Counter {
   /**
    * Increment counter
    */
-  inc(amount: number = 1): void {
+  inc(amount = 1): void {
     this.value += amount;
   }
 
@@ -310,7 +310,7 @@ class Counter {
  * Gauge metric implementation
  */
 class Gauge {
-  private value: number = 0;
+  private value = 0;
   private readonly labels: Record<string, string>;
 
   constructor(labels: Record<string, string> = {}) {
@@ -327,14 +327,14 @@ class Gauge {
   /**
    * Increment gauge
    */
-  inc(amount: number = 1): void {
+  inc(amount = 1): void {
     this.value += amount;
   }
 
   /**
    * Decrement gauge
    */
-  dec(amount: number = 1): void {
+  dec(amount = 1): void {
     this.value -= amount;
   }
 
@@ -359,8 +359,8 @@ class Gauge {
 class Histogram {
   private readonly buckets: number[];
   private readonly counts: number[];
-  private totalCount: number = 0;
-  private totalSum: number = 0;
+  private totalCount = 0;
+  private totalSum = 0;
   private readonly labels: Record<string, string>;
 
   constructor(buckets: number[], labels: Record<string, string> = {}) {
@@ -425,13 +425,13 @@ class Histogram {
  * Comprehensive metrics collection system
  */
 export class MetricsCollector {
-  private config: Required<MetricsConfig>;
-  private counters = new Map<string, Counter>();
-  private gauges = new Map<string, Gauge>();
-  private histograms = new Map<string, Histogram>();
+  private readonly config: Required<MetricsConfig>;
+  private readonly counters = new Map<string, Counter>();
+  private readonly gauges = new Map<string, Gauge>();
+  private readonly histograms = new Map<string, Histogram>();
   private queryWindow = new SlidingWindow(10000, 300000); // 5 minutes
   private systemMetricsInterval?: NodeJS.Timeout;
-  private startTime = Date.now();
+  private readonly startTime = Date.now();
 
   // Built-in metrics
   private readonly builtinCounters = {
@@ -730,7 +730,7 @@ export class MetricsCollector {
   /**
    * Create or get a counter
    */
-  private incrementCounter(name: string, amount: number = 1, labels: Record<string, string> = {}): void {
+  private incrementCounter(name: string, amount = 1, labels: Record<string, string> = {}): void {
     const key = this.getMetricKey(name, labels);
     let counter = this.counters.get(key);
 

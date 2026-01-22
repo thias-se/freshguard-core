@@ -259,18 +259,18 @@ export interface FreshGuardConfig {
     url?: string;
     credentials?: SourceCredentials;
   }>;
-  rules: Array<{
+  rules: {
     id: string;
     sourceId: string;
     table: string;
     type: RuleType;
     frequency: number;
     tolerance?: number;
-    alerts: Array<{
+    alerts: {
       type: AlertDestinationType;
       address: string;
-    }>;
-  }>;
+    }[];
+  }[];
   scheduler?: {
     enabled: boolean;
     timezone?: string;

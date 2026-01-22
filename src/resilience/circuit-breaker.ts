@@ -10,8 +10,10 @@
  * @license MIT
  */
 
-import { StructuredLogger, createComponentLogger, LogContext } from '../observability/logger.js';
-import { MetricsCollector, createComponentMetrics } from '../observability/metrics.js';
+import type { StructuredLogger} from '../observability/logger.js';
+import { createComponentLogger, LogContext } from '../observability/logger.js';
+import type { MetricsCollector} from '../observability/metrics.js';
+import { createComponentMetrics } from '../observability/metrics.js';
 
 // ==============================================
 // Types and Interfaces
@@ -563,7 +565,7 @@ export function createApiCircuitBreaker(name: string): CircuitBreaker {
     errorFilter: (error) => {
       // Count 5xx errors but not 4xx client errors
       if (error.message.includes('status')) {
-        const statusMatch = error.message.match(/status\s+(\d+)/i);
+        const statusMatch = /status\s+(\d+)/i.exec(error.message);
         if (statusMatch) {
           const status = parseInt(statusMatch[1]);
           return status >= 500;
@@ -578,7 +580,7 @@ export function createApiCircuitBreaker(name: string): CircuitBreaker {
  * Create a circuit breaker registry for managing multiple circuits
  */
 export class CircuitBreakerRegistry {
-  private circuits = new Map<string, CircuitBreaker>();
+  private readonly circuits = new Map<string, CircuitBreaker>();
 
   /**
    * Get or create a circuit breaker

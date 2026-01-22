@@ -31,11 +31,11 @@ import { validateDatabaseIdentifier } from '../validators/index.js';
  */
 export class SnowflakeConnector extends BaseConnector {
   private connection: snowflake.Connection | null = null;
-  private account: string = '';
-  private warehouse: string = '';
-  private database: string = '';
-  private schema: string = 'PUBLIC';
-  private connected: boolean = false;
+  private account = '';
+  private warehouse = '';
+  private database = '';
+  private schema = 'PUBLIC';
+  private connected = false;
 
   constructor(config: ConnectorConfig, securityConfig?: Partial<SecurityConfig>) {
     // Validate Snowflake-specific configuration
@@ -73,8 +73,8 @@ export class SnowflakeConnector extends BaseConnector {
    * Extract Snowflake account from host
    */
   private extractAccount(host: string): string {
-    const hostMatch = host.match(/^([^.]+)\.snowflakecomputing\.com$/);
-    if (hostMatch && hostMatch[1]) {
+    const hostMatch = /^([^.]+)\.snowflakecomputing\.com$/.exec(host);
+    if (hostMatch?.[1]) {
       return hostMatch[1];
     }
     throw new ConfigurationError('Could not extract Snowflake account from host');
@@ -414,7 +414,7 @@ export class SnowflakeConnector extends BaseConnector {
       const [database, _schema, _table] = parts;
 
       // Validate database matches (database is validated in constructor, so it's safe to use)
-      if (database && database.toUpperCase() !== this.database!.toUpperCase()) {
+      if (database && database.toUpperCase() !== this.database.toUpperCase()) {
         throw new SecurityError('Table database does not match configured database');
       }
 
@@ -505,7 +505,7 @@ export class SnowflakeConnector extends BaseConnector {
    */
   async getTableMetadata(
     tableName: string,
-    timestampColumn: string = 'UPDATED_AT'
+    timestampColumn = 'UPDATED_AT'
   ): Promise<{ rowCount: number; lastUpdate?: Date }> {
     console.warn('Warning: getTableMetadata is deprecated. Use getRowCount() and getMaxTimestamp() instead.');
 

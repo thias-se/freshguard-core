@@ -21,10 +21,14 @@ import {
   TimeoutError
 } from '../errors/index.js';
 
-import { StructuredLogger, createDatabaseLogger, logTimedOperation, type LogContext } from '../observability/logger.js';
-import { MetricsCollector, createComponentMetrics, timeOperation } from '../observability/metrics.js';
-import { QueryComplexityAnalyzer, createQueryAnalyzer, type QueryComplexity, type TableMetadata } from '../security/query-analyzer.js';
-import { SchemaCache, createSchemaCache, generateStructureHash, type CachedTableSchema } from '../security/schema-cache.js';
+import type { StructuredLogger} from '../observability/logger.js';
+import { createDatabaseLogger, logTimedOperation, type LogContext } from '../observability/logger.js';
+import type { MetricsCollector} from '../observability/metrics.js';
+import { createComponentMetrics, timeOperation } from '../observability/metrics.js';
+import type { QueryComplexityAnalyzer} from '../security/query-analyzer.js';
+import { createQueryAnalyzer, type QueryComplexity, type TableMetadata } from '../security/query-analyzer.js';
+import type { SchemaCache} from '../security/schema-cache.js';
+import { createSchemaCache, generateStructureHash, type CachedTableSchema } from '../security/schema-cache.js';
 
 /**
  * Abstract base connector with security and observability built-in
@@ -518,7 +522,7 @@ export abstract class BaseConnector implements Connector {
   /**
    * Internal row count method with optional validation
    */
-  private async getRowCountInternal(table: string, validateQuery: boolean = true): Promise<number> {
+  private async getRowCountInternal(table: string, validateQuery = true): Promise<number> {
     const escapedTable = this.escapeIdentifier(table);
     const sql = `SELECT COUNT(*) as count FROM ${escapedTable}`;
 
@@ -576,7 +580,7 @@ export abstract class BaseConnector implements Connector {
   /**
    * Internal max timestamp method with optional validation
    */
-  private async getMaxTimestampInternal(table: string, column: string, validateQuery: boolean = true): Promise<Date | null> {
+  private async getMaxTimestampInternal(table: string, column: string, validateQuery = true): Promise<Date | null> {
     const escapedTable = this.escapeIdentifier(table);
     const escapedColumn = this.escapeIdentifier(column);
     const sql = `SELECT MAX(${escapedColumn}) as max_date FROM ${escapedTable}`;
@@ -644,7 +648,7 @@ export abstract class BaseConnector implements Connector {
   /**
    * Internal min timestamp method with optional validation
    */
-  private async getMinTimestampInternal(table: string, column: string, validateQuery: boolean = true): Promise<Date | null> {
+  private async getMinTimestampInternal(table: string, column: string, validateQuery = true): Promise<Date | null> {
     const escapedTable = this.escapeIdentifier(table);
     const escapedColumn = this.escapeIdentifier(column);
     const sql = `SELECT MIN(${escapedColumn}) as min_date FROM ${escapedTable}`;

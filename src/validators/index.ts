@@ -239,7 +239,7 @@ export function validateConnectorConfig(config: Partial<ConnectorConfig>): void 
  * @param maxLength - Maximum allowed length
  * @returns Sanitized string
  */
-export function sanitizeString(input: string, maxLength: number = 256): string {
+export function sanitizeString(input: string, maxLength = 256): string {
   if (typeof input !== 'string') {
     throw new Error('Input must be a string');
   }

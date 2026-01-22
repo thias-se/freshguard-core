@@ -258,7 +258,7 @@ class SimpleSQLParser {
     const hasHaving = /\bhaving\b/.test(normalizedSql);
 
     // Check for LIMIT
-    const limitMatch = normalizedSql.match(/\blimit\s+(\d+)/);
+    const limitMatch = /\blimit\s+(\d+)/.exec(normalizedSql);
     const hasLimit = !!limitMatch;
     const limitValue = limitMatch ? parseInt(limitMatch[1], 10) : undefined;
 
@@ -359,7 +359,7 @@ class SimpleSQLParser {
  */
 export class QueryComplexityAnalyzer {
   private config: QueryAnalyzerConfig;
-  private riskFactors: RiskFactor[];
+  private readonly riskFactors: RiskFactor[];
 
   constructor(config: Partial<QueryAnalyzerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };

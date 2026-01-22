@@ -19,7 +19,7 @@ export abstract class FreshGuardError extends Error {
   public readonly timestamp: Date;
   public readonly sanitized: boolean;
 
-  constructor(message: string, code: string, sanitized: boolean = true) {
+  constructor(message: string, code: string, sanitized = true) {
     super(message);
     this.name = this.constructor.name;
     this.code = code;
@@ -56,7 +56,7 @@ export abstract class FreshGuardError extends Error {
 export class SecurityError extends FreshGuardError {
   public readonly attemptedAction: string;
 
-  constructor(message: string, attemptedAction: string = 'unknown') {
+  constructor(message: string, attemptedAction = 'unknown') {
     super(message, 'SECURITY_VIOLATION', true);
     this.attemptedAction = attemptedAction;
   }
@@ -178,8 +178,8 @@ export class TimeoutError extends FreshGuardError {
 
   constructor(
     message: string,
-    operationType: string = 'unknown',
-    timeoutMs: number = 0
+    operationType = 'unknown',
+    timeoutMs = 0
   ) {
     const sanitizedMessage = TimeoutError.sanitizeTimeoutError(message);
     super(sanitizedMessage, 'OPERATION_TIMEOUT', true);
@@ -228,7 +228,7 @@ export class QueryError extends FreshGuardError {
 
   constructor(
     message: string,
-    queryType: string = 'unknown',
+    queryType = 'unknown',
     table?: string,
     originalError?: Error
   ) {

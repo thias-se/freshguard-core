@@ -1,14 +1,16 @@
-# FreshGuard Core - Basic Freshness Monitoring Example
+# FreshGuard Core - Secure Monitoring Example
 
-This example demonstrates how to use **FreshGuard Core** for data pipeline freshness monitoring and volume anomaly detection in a self-hosted environment.
+This example demonstrates **FreshGuard Core v0.2.0** with **Phase 2 Security Implementation** for enterprise-grade data pipeline monitoring in a self-hosted environment.
 
 ## What This Example Shows
 
-✅ **PostgreSQL Integration** - Connect to and monitor PostgreSQL databases
-✅ **Freshness Monitoring** - Detect when data becomes stale
+✅ **Enterprise Security** - Query complexity analysis, SQL injection protection, SSL enforcement
+✅ **PostgreSQL Integration** - Secure connector with built-in security validation
+✅ **Freshness Monitoring** - Detect when data becomes stale with automatic query analysis
 ✅ **Volume Anomaly Detection** - Identify unexpected changes in data volume
-✅ **Alert Handling** - Process and respond to monitoring alerts
-✅ **Production Patterns** - Structured code ready for production use
+✅ **Security Observability** - Structured logging, metrics, and audit trails
+✅ **Production Resilience** - Circuit breakers, timeouts, and error sanitization
+✅ **Alert Handling** - Secure notification channels with data sanitization
 
 ## Prerequisites
 
@@ -59,21 +61,33 @@ pnpm run setup
 
 Expected output:
 ```
-🚀 Setting up FreshGuard monitoring example...
+🚀 Setting up FreshGuard Core - Secure Monitoring Example
 
-📡 Connecting to PostgreSQL...
-✅ Database connection established
+🛡️  Phase 2 Security Features:
+   • Secure PostgreSQL connector with SSL enforcement
+   • Query complexity analysis for all database operations
+   • Structured logging with sensitive data sanitization
+   • Circuit breaker protection for connection failures
+   • Advanced SQL injection prevention
 
-🔍 Testing database connection...
-   Database time: 2024-01-15T10:30:45.123Z
-   PostgreSQL version: PostgreSQL 16.1
-✅ Database connection test passed
+📡 Creating secure PostgreSQL connector...
+✅ Secure connector created with enterprise security features
 
-📊 Checking sample data...
-   Orders table: 6 rows
-   User events table: 1050 rows
-   Latest order updated: 10 minutes ago
-✅ Sample data verified
+🔍 Testing secure database connection...
+   Connection verified - PostgreSQL system accessible (4 databases)
+   Security: All queries passed complexity analysis
+   Performance: Connection within timeout limits
+✅ Secure connection test passed
+
+📊 Verifying sample data with security analysis...
+   🔍 Checking orders table...
+     Orders table: 6 rows (query risk score: low)
+   🔍 Checking user_events table...
+     User events table: 1050 rows (query risk score: low)
+   🔍 Checking latest order updates...
+     Latest order updated: 10 minutes ago
+   ✅ All data verification queries passed security analysis
+✅ Sample data verified through secure queries
 ```
 
 ### 5. Run Monitoring
@@ -85,14 +99,28 @@ pnpm run monitor
 
 Expected output:
 ```
-🔍 FreshGuard Monitoring Example
+🔍 FreshGuard Core - Secure Monitoring Example
+
+🛡️  Phase 2 Security Features Enabled:
+   • Query complexity analysis
+   • SQL injection protection
+   • SSL connection enforcement
+   • Structured logging & metrics
+   • Circuit breaker protection
 
 📊 Monitoring 2 rules...
 🕐 Started at: 2024-01-15T10:30:45.123Z
 
+🔐 Initializing secure PostgreSQL connector...
+✅ Secure connector initialized
+
+🔍 Testing secure connection...
+✅ Secure connection established
+
 🔎 Checking: Orders Freshness Check
    Table: orders
    Type: freshness
+   Security: Query analysis enabled
    Status: ✅ OK
    Data lag: 10 minutes
    Tolerance: 60 minutes
@@ -101,10 +129,26 @@ Expected output:
 🔎 Checking: User Events Volume Check
    Table: user_events
    Type: volume
+   Security: Query analysis enabled
    Status: ✅ OK
    Current count: 50
    Expected count: 45
    Deviation: 11%
+
+🔒 SECURITY & PERFORMANCE METRICS
+==================================================
+📊 Query Performance:
+   • Queries executed: Protected by query analysis
+   • SQL injection attempts blocked: 0
+   • Average query time: < 100ms
+   • Connection pool: Healthy
+
+🛡️  Security Status:
+   • SSL connection: ✅ Enforced
+   • Query analysis: ✅ Enabled
+   • Risk scoring: ✅ Active (max: 70)
+   • Complexity limits: ✅ Active (max: 80)
+   • Circuit breaker: ✅ Closed (healthy)
 ```
 
 ## Understanding the Example
@@ -163,29 +207,43 @@ basic-freshness-check/
 
 ### Understanding the Code
 
-**setup.ts** - Verifies everything works:
+**setup.ts** - Secure connector setup and verification:
 ```typescript
-import { createDatabase } from '@thias-se/freshguard-core';
+import { PostgresConnector } from '@thias-se/freshguard-core';
 
-const db = createDatabase(DATABASE_URL);
-// Test connection, verify sample data exists
+// Create secure connector with enterprise security features
+const connector = new PostgresConnector(dbConfig, {
+  enableQueryAnalysis: true,      // SQL injection protection
+  maxQueryRiskScore: 80,         // Block high-risk queries
+  requireSSL: true,              // Enforce secure connections
+  enableDetailedLogging: true    // Full audit trail
+});
+
+// Test connection with security validation
+await connector.testConnection();
 ```
 
-**monitor.ts** - Runs monitoring checks:
+**monitor.ts** - Secure monitoring with automatic query analysis:
 ```typescript
-import { checkFreshness, checkVolumeAnomaly } from '@thias-se/freshguard-core';
+import {
+  PostgresConnector,
+  checkFreshness,
+  checkVolumeAnomaly
+} from '@thias-se/freshguard-core';
 
-// Define monitoring rules
-const rule: MonitoringRule = {
-  tableName: 'orders',
-  ruleType: 'freshness',
-  toleranceMinutes: 60,
-  timestampColumn: 'updated_at',
-  // ...
+// Security configuration for production
+const securityConfig = {
+  enableQueryAnalysis: true,
+  maxQueryRiskScore: 70,           // Block risky queries
+  maxQueryComplexityScore: 80,     // Limit query complexity
+  requireSSL: true,                // SSL enforced
+  blockedKeywords: ['INSERT', 'UPDATE', 'DELETE', 'DROP']
 };
 
-// Execute check
-const result = await checkFreshness(db, rule);
+const connector = new PostgresConnector(dbConfig, securityConfig);
+
+// Execute secure monitoring check
+const result = await checkFreshness(connector, rule);
 ```
 
 ### Customizing Monitoring Rules
@@ -241,33 +299,65 @@ UPDATE orders SET updated_at = '2024-01-01 00:00:00';
 
 ### Production Integration
 
-**Scheduling with cron:**
+**Secure Scheduling with Enterprise Features:**
 ```typescript
 import cron from 'node-cron';
+import { PostgresConnector } from '@thias-se/freshguard-core';
 
-// Run every 5 minutes
+// Production security configuration
+const prodSecurityConfig = {
+  enableQueryAnalysis: true,
+  maxQueryRiskScore: 50,         // Stricter in production
+  requireSSL: true,
+  enableDetailedLogging: false,   // Reduce log volume
+  connectionTimeout: 15000
+};
+
+// Secure scheduled monitoring
 cron.schedule('*/5 * * * *', async () => {
-  const results = await runMonitoring();
-  await handleAlerts(results);
+  const connector = new PostgresConnector(dbConfig, prodSecurityConfig);
+  try {
+    const results = await runSecureMonitoring(connector);
+    await handleSecureAlerts(results);
+  } catch (error) {
+    // Secure error handling - no sensitive data in logs
+    logger.error('Monitoring failed', {
+      error: error.message,  // Already sanitized
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 ```
 
-**Adding real alerts:**
+**Secure Alert Handling:**
 ```typescript
 if (result.status === 'alert') {
-  // Send to Slack
+  // Secure Slack notification with audit trail
   await fetch(process.env.SLACK_WEBHOOK_URL, {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${process.env.SLACK_TOKEN}` // Authenticated
+    },
     body: JSON.stringify({
-      text: `🚨 ${rule.name}: ${result.message}`
+      text: `🚨 ${rule.name}: ${sanitizeAlertMessage(result.message)}`,
+      attachments: [{
+        color: 'danger',
+        fields: [
+          { title: 'Security', value: 'Query analysis passed', short: true },
+          { title: 'Audit ID', value: generateAuditId(), short: true }
+        ]
+      }]
     })
   });
 
-  // Send email
-  await sendEmail({
-    to: 'team@company.com',
-    subject: `Data Alert: ${rule.name}`,
-    body: result.message
+  // Encrypted email with sanitized content
+  await sendSecureEmail({
+    to: process.env.ALERT_EMAIL,
+    subject: `🛡️ Secure Data Alert: ${rule.name}`,
+    body: sanitizeAlertMessage(result.message),
+    encryption: 'TLS',
+    auditTrail: true
   });
 }
 ```

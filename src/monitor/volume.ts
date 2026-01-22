@@ -216,7 +216,7 @@ async function getHistoricalData(
   db: Database,
   ruleId: string,
   baselineWindowDays: number
-): Promise<Array<{ rowCount: number }>> {
+): Promise<{ rowCount: number }[]> {
   try {
     // Calculate cutoff date safely
     const cutoffDate = new Date();
@@ -241,7 +241,7 @@ async function getHistoricalData(
       .limit(1000); // Limit to prevent memory exhaustion
 
     // Convert and validate historical data
-    const validatedData: Array<{ rowCount: number }> = [];
+    const validatedData: { rowCount: number }[] = [];
 
     for (const item of historicalData) {
       if (item.rowCount === null || item.rowCount === undefined) {
@@ -271,7 +271,7 @@ async function getHistoricalData(
  * Calculate baseline statistics with security validation
  */
 function calculateSecureBaseline(
-  historicalData: Array<{ rowCount: number }>,
+  historicalData: { rowCount: number }[],
   currentRowCount: number
 ): { mean: number; deviationPercent: number } {
   try {
