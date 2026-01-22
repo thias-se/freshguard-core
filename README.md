@@ -15,20 +15,35 @@ Monitor when your data pipelines go stale. Get alerts when:
 
 **Enterprise-grade security** built-in. Supports PostgreSQL, DuckDB, BigQuery, and Snowflake. Self-hosted. Free forever.
 
-## 🔒 Security Features
+## 🔒 Security Features (Phase 2 Complete)
 
-FreshGuard Core implements **defense-in-depth security** for production deployments:
+FreshGuard Core implements **enterprise-grade security** with advanced threat detection:
 
-- ✅ **SQL Injection Prevention** - Parameterized queries and input validation
-- ✅ **Credential Security** - Environment-based secrets, never hardcoded
+**🛡️ Query Security & Analysis**
+- ✅ **Advanced SQL Injection Protection** - 0-100 risk scoring with pattern analysis
+- ✅ **Query Complexity Analysis** - Automatic blocking of expensive/dangerous queries
+- ✅ **Real-time Threat Detection** - Sophisticated attack pattern recognition
+- ✅ **Schema-aware Validation** - Table metadata integration for enhanced security
+
+**🔄 Production Resilience**
+- ✅ **Circuit Breaker Protection** - Automatic failure detection and recovery
+- ✅ **Exponential Backoff Retry** - Intelligent retry logic with jitter
+- ✅ **Connection Pooling** - Resource management and leak prevention
+- ✅ **Timeout Protection** - DoS attack mitigation with AbortController
+
+**📊 Complete Observability**
+- ✅ **Structured Logging** - Pino-based JSON logging with sensitive data sanitization
+- ✅ **Performance Metrics** - Query performance tracking with percentiles
+- ✅ **Security Audit Trail** - Comprehensive logging of security events
+- ✅ **Prometheus Integration** - Export metrics for monitoring systems
+
+**🔐 Infrastructure Security**
 - ✅ **SSL/TLS Enforcement** - Encrypted connections required by default
+- ✅ **Credential Security** - Environment-based secrets, never hardcoded
 - ✅ **Error Sanitization** - No sensitive information leaked in logs
-- ✅ **Timeout Protection** - DoS attack mitigation with configurable limits
 - ✅ **Package Signing** - Cosign-signed releases with SBOM transparency
-- ✅ **Vulnerability Scanning** - Automated security scanning in CI/CD
-- ✅ **Supply Chain Security** - Software Bill of Materials (SBOM) included
 
-**📋 [Complete Security Guide →](docs/SECURITY_FOR_SELF_HOSTERS.md)**
+**📋 [Complete Security Guide →](docs/SECURITY_FOR_SELF_HOSTERS.md)** | **🚀 [Integration Guide →](docs/INTEGRATION_GUIDE.md)**
 
 ## Quick Start
 
@@ -358,9 +373,22 @@ MIT - See [LICENSE](./LICENSE)
 ## 📞 Support
 
 ### 📋 Documentation
-- **🔒 [Security Guide](docs/SECURITY_FOR_SELF_HOSTERS.md)** - Complete security documentation
-- **🔧 [Self-Hosting Guide](docs/SELF_HOSTING.md)** - Deployment instructions
-- **🤝 [Contributing Guide](docs/CONTRIBUTING.md)** - Development setup
+
+**🚀 Getting Started**
+- **🔧 [Integration Guide](docs/INTEGRATION_GUIDE.md)** - Complete integration examples for developers
+- **🏠 [Self-Hosting Guide](docs/SELF_HOSTING.md)** - Production deployment with security features
+- **🤝 [Contributing Guide](docs/CONTRIBUTING.md)** - Development setup and guidelines
+
+**🔒 Security & Production**
+- **🛡️ [Security Guide](docs/SECURITY_FOR_SELF_HOSTERS.md)** - Complete security hardening documentation
+- **📊 [Phase 2 Implementation](docs/core-security-phase2.md)** - Advanced security features and enterprise features
+- **🔍 [Security Testing](docs/LICENSE_CLARIFICATION.md)** - Vulnerability testing and compliance
+
+**🏗️ Advanced Topics**
+- **⚙️ Configuration Examples** - Environment-specific setups (dev/staging/prod)
+- **📈 Monitoring & Observability** - Structured logging, metrics, and alerting
+- **🔄 Multi-Database Setup** - PostgreSQL, BigQuery, Snowflake, DuckDB integration
+- **🚨 Circuit Breakers & Resilience** - Automatic failure recovery and protection
 
 ### 💬 Community
 - **🐛 [Issues](https://github.com/freshguard/freshguard/issues)** - Bug reports and feature requests
