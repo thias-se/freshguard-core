@@ -1,6 +1,6 @@
 {
   "name": "@thias-se/freshguard-core",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Open source data freshness monitoring engine",
   "type": "module",
   "main": "./dist/index.js",

@@ -197,10 +197,13 @@ export abstract class BaseConnector implements Connector {
     }
 
     // Check if query matches allowed patterns
-    const isAllowed = this.allowedPatterns.some(pattern => pattern.test(sql));
+    // Fix: Trim SQL to handle multiline queries with leading whitespace
+    const trimmedSql = sql.trim();
+    const isAllowed = this.allowedPatterns.some(pattern => pattern.test(trimmedSql));
     if (!isAllowed) {
       this.logger.warn('Query pattern not allowed', {
         sqlPreview: sql.substring(0, 100),
+        trimmedSqlPreview: trimmedSql.substring(0, 100),
         allowedPatterns: this.allowedPatterns.map(p => p.source)
       });
       throw new SecurityError('Query pattern not allowed');
