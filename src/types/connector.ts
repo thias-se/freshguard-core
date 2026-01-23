@@ -162,7 +162,11 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
     /^SELECT MIN\(/i,
     /^DESCRIBE /i,
     /^SHOW /i,
-    /^SELECT .+ FROM information_schema\./i,
+    // Fixed: More robust patterns to handle various whitespace scenarios
+    /^SELECT\s+.+?\s+FROM\s+information_schema\./is,  // Non-greedy match with explicit whitespace
+    /^SELECT[\s\S]+?FROM[\s\S]+?information_schema\./is,  // Handle any whitespace including tabs/newlines
+    // BigQuery-specific pattern for backtick syntax
+    /^SELECT[\s\S]+?FROM[\s\S]*`[^`]*\.INFORMATION_SCHEMA\./is,  // BigQuery backtick syntax
   ],
   blockedKeywords: [
     'INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE',

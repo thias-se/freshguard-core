@@ -174,6 +174,28 @@ export abstract class BaseConnector implements Connector {
       }
     }
 
+    // Check for incomplete SQL clauses that could indicate malformed queries
+    const incompletePatterns = [
+      /\bWHERE\s*$/i,
+      /\bAND\s*$/i,
+      /\bOR\s*$/i,
+      /\bJOIN\s*$/i,
+      /\bON\s*$/i,
+      /\bSET\s*$/i,
+      /\bVALUES\s*$/i
+    ];
+
+    for (const pattern of incompletePatterns) {
+      if (pattern.test(sql.trim())) {
+        const matchedKeyword = pattern.source.replace(/[\^$\\]/g, '').replace(/\s\*\$/g, '');
+        this.logger.warn('Incomplete SQL clause detected', {
+          keyword: matchedKeyword,
+          sqlPreview: sql.substring(0, 100)
+        });
+        throw new SecurityError(`Incomplete SQL clause: query ends with ${matchedKeyword}`);
+      }
+    }
+
     // Check if query matches allowed patterns
     const isAllowed = this.allowedPatterns.some(pattern => pattern.test(sql));
     if (!isAllowed) {
