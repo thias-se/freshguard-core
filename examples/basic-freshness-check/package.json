@@ -7,17 +7,17 @@
   "scripts": {
     "setup": "tsx setup.ts",
     "monitor": "tsx monitor.ts",
-    "start": "npm run setup && npm run monitor",
+    "start": "pnpm setup && pnpm monitor",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down"
   },
   "dependencies": {
-    "@thias-se/freshguard-core": "^0.2.0",
-    "dotenv": "^16.4.7"
+    "@thias-se/freshguard-core": "^0.5.2",
+    "dotenv": "^16.6.1"
   },
   "devDependencies": {
-    "@types/node": "^20.17.11",
-    "tsx": "^4.20.0"
+    "@types/node": "^20.19.30",
+    "tsx": "^4.21.0"
   },
   "engines": {
     "node": ">=20.0.0"

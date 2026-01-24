@@ -10,13 +10,15 @@
  * 4. Circuit breaker protection and timeout handling
  * 5. Freshness and volume anomaly monitoring
  *
- * Updated for FreshGuard Core v0.2.0 with Phase 2 Security Implementation
+ * Updated for FreshGuard Core v0.5.2 with Phase 2 Security Implementation
  */
 
 import {
   PostgresConnector,
+  createDatabase,
   checkFreshness,
   checkVolumeAnomaly,
+  type Database,
   type MonitoringRule,
   type CheckResult
 } from '@thias-se/freshguard-core';
@@ -55,7 +57,6 @@ const securityConfig = {
 const MONITORING_RULES: MonitoringRule[] = [
   {
     id: 'orders-freshness',
-    workspaceId: 'self-hosted-example',
     sourceId: 'postgres_example',
     name: 'Orders Freshness Check',
     tableName: 'orders',
@@ -69,11 +70,10 @@ const MONITORING_RULES: MonitoringRule[] = [
   },
   {
     id: 'events-volume',
-    workspaceId: 'self-hosted-example',
     sourceId: 'postgres_example',
     name: 'User Events Volume Check',
     tableName: 'user_events',
-    ruleType: 'volume',
+    ruleType: 'volume_anomaly',
     toleranceMinutes: 30, // Check volume patterns over 30-minute windows
     timestampColumn: 'timestamp',
     checkIntervalMinutes: 10,
@@ -96,17 +96,24 @@ async function main(): Promise<void> {
   console.log(`🕐 Started at: ${new Date().toISOString()}\n`);
 
   let connector: PostgresConnector;
+  let database: Database;
 
   try {
     // Create secure database connector with Phase 2 security features
     console.log('🔐 Initializing secure PostgreSQL connector...');
-    connector = new PostgresConnector(dbConfig, securityConfig);
+    connector = new PostgresConnector(dbConfig);
     console.log('✅ Secure connector initialized\n');
 
     // Test connection with security validation
     console.log('🔍 Testing secure connection...');
     await connector.testConnection();
     console.log('✅ Secure connection established\n');
+
+    // Create database instance for monitoring functions
+    console.log('🗄️  Creating database instance for monitoring...');
+    const connectionString = `postgresql://${dbConfig.username}:${dbConfig.password}@${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`;
+    database = createDatabase(connectionString);
+    console.log('✅ Database instance created\n');
 
     // Run monitoring checks for each rule
     const results: Array<{ rule: MonitoringRule; result: CheckResult }> = [];
@@ -122,10 +129,10 @@ async function main(): Promise<void> {
 
         if (rule.ruleType === 'freshness') {
           // Use secure freshness check with automatic query analysis
-          result = await checkFreshness(connector as any, rule);
-        } else if (rule.ruleType === 'volume') {
+          result = await checkFreshness(database, rule);
+        } else if (rule.ruleType === 'volume_anomaly') {
           // Use secure volume anomaly detection
-          result = await checkVolumeAnomaly(connector as any, rule);
+          result = await checkVolumeAnomaly(database, rule);
         } else {
           throw new Error(`Unknown rule type: ${rule.ruleType}`);
         }
@@ -182,29 +189,29 @@ async function main(): Promise<void> {
 }
 
 function displayCheckResult(rule: MonitoringRule, result: CheckResult): void {
-  const statusEmoji = result.status === 'alert' ? '🚨' : result.status === 'warning' ? '⚠️' : '✅';
+  const statusEmoji = result.status === 'alert' ? '🚨' : result.status === 'ok' ? '✅' : '⚠️';
   console.log(`   Status: ${statusEmoji} ${result.status.toUpperCase()}`);
 
   if (rule.ruleType === 'freshness') {
     console.log(`   Data lag: ${result.lagMinutes} minutes`);
     console.log(`   Tolerance: ${rule.toleranceMinutes} minutes`);
-    if (result.lastUpdateTime) {
-      console.log(`   Last update: ${new Date(result.lastUpdateTime).toLocaleString()}`);
+    if (result.lastUpdate) {
+      console.log(`   Last update: ${new Date(result.lastUpdate).toLocaleString()}`);
     }
-  } else if (rule.ruleType === 'volume') {
-    if (result.currentValue !== undefined) {
-      console.log(`   Current count: ${result.currentValue}`);
+  } else if (rule.ruleType === 'volume_anomaly') {
+    if (result.rowCount !== undefined) {
+      console.log(`   Current count: ${result.rowCount}`);
     }
-    if (result.expectedValue !== undefined) {
-      console.log(`   Expected count: ${result.expectedValue}`);
+    if (result.baselineAverage !== undefined) {
+      console.log(`   Expected count: ${result.rowCount}`);
     }
     if (result.deviation !== undefined) {
       console.log(`   Deviation: ${result.deviation}%`);
     }
   }
 
-  if (result.message) {
-    console.log(`   Message: ${result.message}`);
+  if (result.error) {
+    console.log(`   Message: ${result.error}`);
   }
 }
 
@@ -235,7 +242,7 @@ function displaySecurityMetrics(connector: PostgresConnector): void {
 
 function displaySummary(results: Array<{ rule: MonitoringRule; result: CheckResult }>): void {
   const alertCount = results.filter(r => r.result.status === 'alert').length;
-  const warningCount = results.filter(r => r.result.status === 'warning').length;
+  const warningCount = results.filter(r => r.result.status === 'failed').length;
   const okCount = results.filter(r => r.result.status === 'ok').length;
 
   console.log(`Total checks: ${results.length}`);
@@ -248,7 +255,7 @@ function displaySummary(results: Array<{ rule: MonitoringRule; result: CheckResu
     results
       .filter(r => r.result.status === 'alert')
       .forEach(({ rule, result }) => {
-        console.log(`  • ${rule.name}: ${result.message || 'Alert condition met'}`);
+        console.log(`  • ${rule.name}: ${result.error || 'Alert condition met'}`);
       });
   }
 }
@@ -276,7 +283,7 @@ function handleAlerts(results: Array<{ rule: MonitoringRule; result: CheckResult
     console.log(`  Rule ID: ${rule.id}`);
     console.log(`  Table: ${rule.tableName}`);
     console.log(`  Status: ${result.status}`);
-    console.log(`  Message: ${result.message || 'Alert threshold exceeded'}`);
+    console.log(`  Message: ${result.error || 'Alert threshold exceeded'}`);
 
     if (rule.ruleType === 'freshness') {
       console.log(`  Data is ${result.lagMinutes} minutes old (tolerance: ${rule.toleranceMinutes}m)`);

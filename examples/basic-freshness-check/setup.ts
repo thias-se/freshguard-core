@@ -9,7 +9,7 @@
  * 3. Test database connectivity with built-in security features
  * 4. Display monitoring rules configuration
  *
- * Updated for FreshGuard Core v0.2.0 with Phase 2 Security Implementation
+ * Updated for FreshGuard Core v0.5.2 with Phase 2 Security Implementation
  */
 
 import { PostgresConnector } from '@thias-se/freshguard-core';
