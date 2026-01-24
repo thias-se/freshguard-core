@@ -28,7 +28,7 @@ export interface MetadataStorageConfig {
   path?: string; // for DuckDB
   url?: string; // for PostgreSQL
 
-  // PostgreSQL schema customization for multi-tenant applications
+  // PostgreSQL schema customization for self-hosted deployments
   schema?: {
     name?: string; // Schema name (default: 'public')
     tablePrefix?: string; // Table prefix (default: '')

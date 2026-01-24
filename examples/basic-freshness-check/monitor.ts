@@ -111,7 +111,7 @@ async function main(): Promise<void> {
     // Test connection with security validation
     console.log('🔍 Testing secure connection...');
     await connector.testConnection();
-  
+
     console.log('✅ Secure connection established\n');
 
     // Create database instance for monitoring functions
