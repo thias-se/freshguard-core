@@ -70,6 +70,17 @@ export interface MonitoringRule {
   deviationThresholdPercent?: number;
   minimumRowCount?: number;
 
+  // Enhanced baseline configuration
+  baselineConfig?: {
+    windowDays?: number; // Override baselineWindowDays
+    minimumDataPoints?: number; // Minimum required data points for baseline
+    timeoutSeconds?: number; // Timeout for baseline calculation queries
+    excludeWeekends?: boolean; // Exclude weekend data from baseline
+    calculationMethod?: 'mean' | 'median' | 'trimmed_mean'; // Statistical method
+    trimmedMeanPercentile?: number; // For trimmed_mean method (0-50)
+    seasonalAdjustment?: boolean; // Account for day-of-week patterns
+  };
+
   // Schema change settings
   trackColumnChanges?: boolean;
   trackTableChanges?: boolean;

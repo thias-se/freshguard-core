@@ -24,7 +24,7 @@ export async function createMetadataStorage(
     if (!config.url) {
       throw new Error('PostgreSQL URL is required');
     }
-    storage = new PostgreSQLMetadataStorage(config.url);
+    storage = new PostgreSQLMetadataStorage(config.url, config);
   } else {
     throw new Error(`Unknown storage type: ${(config as any).type}`);
   }

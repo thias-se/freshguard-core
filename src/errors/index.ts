@@ -362,6 +362,142 @@ export class MonitoringError extends FreshGuardError {
   }
 }
 
+/**
+ * Error for metadata storage operations
+ */
+export class MetadataStorageError extends FreshGuardError {
+  public readonly operation?: string;
+  public readonly context?: Record<string, unknown>;
+
+  constructor(
+    message: string,
+    operation?: string,
+    context?: Record<string, unknown>,
+    originalError?: Error
+  ) {
+    const sanitizedMessage = MetadataStorageError.sanitizeMetadataError(message, originalError);
+    super(sanitizedMessage, 'METADATA_STORAGE_FAILED', true);
+    this.operation = operation;
+    this.context = MetadataStorageError.sanitizeContext(context);
+  }
+
+  /**
+   * Sanitize metadata error message to prevent information leakage
+   */
+  private static sanitizeMetadataError(message: string, _originalError?: Error): string {
+    const lowerMessage = message.toLowerCase();
+
+    // Handle database-specific errors
+    if (lowerMessage.includes('connection') || lowerMessage.includes('connect')) {
+      return 'Metadata storage connection failed';
+    }
+
+    if (lowerMessage.includes('permission') || lowerMessage.includes('access denied')) {
+      return 'Insufficient permissions for metadata storage operation';
+    }
+
+    if (lowerMessage.includes('table') && (lowerMessage.includes('not exist') || lowerMessage.includes('does not exist'))) {
+      return 'Metadata storage not properly initialized';
+    }
+
+    if (lowerMessage.includes('timeout')) {
+      return 'Metadata storage operation timeout';
+    }
+
+    if (lowerMessage.includes('disk') || lowerMessage.includes('space')) {
+      return 'Metadata storage disk space issue';
+    }
+
+    if (lowerMessage.includes('lock') || lowerMessage.includes('deadlock')) {
+      return 'Metadata storage lock contention';
+    }
+
+    // Generic sanitized message for unknown errors
+    return 'Metadata storage operation failed';
+  }
+
+  /**
+   * Sanitize context to remove sensitive information
+   */
+  private static sanitizeContext(context?: Record<string, unknown>): Record<string, unknown> | undefined {
+    if (!context) return undefined;
+
+    const sanitized: Record<string, unknown> = {};
+
+    Object.entries(context).forEach(([key, value]) => {
+      // Include safe context keys
+      if (['operation', 'ruleId', 'table', 'recordCount', 'duration'].includes(key)) {
+        sanitized[key] = value;
+      }
+      // Exclude potentially sensitive keys like connection strings, credentials, etc.
+    });
+
+    return Object.keys(sanitized).length > 0 ? sanitized : undefined;
+  }
+
+  static initializationFailed(reason?: string): MetadataStorageError {
+    return new MetadataStorageError(
+      reason ? `Initialization failed: ${reason}` : 'Metadata storage initialization failed',
+      'initialize',
+      { phase: 'initialization' }
+    );
+  }
+
+  static saveExecutionFailed(ruleId: string, originalError?: Error): MetadataStorageError {
+    return new MetadataStorageError(
+      'Failed to save check execution result',
+      'saveExecution',
+      { ruleId },
+      originalError
+    );
+  }
+
+  static getHistoricalDataFailed(ruleId: string, days: number, originalError?: Error): MetadataStorageError {
+    return new MetadataStorageError(
+      'Failed to retrieve historical execution data',
+      'getHistoricalData',
+      { ruleId, windowDays: days },
+      originalError
+    );
+  }
+
+  static saveRuleFailed(ruleId: string, originalError?: Error): MetadataStorageError {
+    return new MetadataStorageError(
+      'Failed to save monitoring rule',
+      'saveRule',
+      { ruleId },
+      originalError
+    );
+  }
+
+  static getRuleFailed(ruleId: string, originalError?: Error): MetadataStorageError {
+    return new MetadataStorageError(
+      'Failed to retrieve monitoring rule',
+      'getRule',
+      { ruleId },
+      originalError
+    );
+  }
+
+  static connectionFailed(originalError?: Error): MetadataStorageError {
+    return new MetadataStorageError(
+      'Metadata storage connection failed',
+      'connect',
+      undefined,
+      originalError
+    );
+  }
+
+  static migrationFailed(version?: string, originalError?: Error): MetadataStorageError {
+    return new MetadataStorageError(
+      'Database migration failed',
+      'migrate',
+      { version },
+      originalError
+    );
+  }
+}
+
 // ==============================================
 // Error Utilities
 // ==============================================
@@ -478,6 +614,21 @@ export const createError = {
       MonitoringError.freshnessCheckFailed(table, reason),
     volumeCheckFailed: (table: string, reason: string) =>
       MonitoringError.volumeCheckFailed(table, reason),
+  },
+
+  metadata: {
+    initializationFailed: (reason?: string) => MetadataStorageError.initializationFailed(reason),
+    saveExecutionFailed: (ruleId: string, originalError?: Error) =>
+      MetadataStorageError.saveExecutionFailed(ruleId, originalError),
+    getHistoricalDataFailed: (ruleId: string, days: number, originalError?: Error) =>
+      MetadataStorageError.getHistoricalDataFailed(ruleId, days, originalError),
+    saveRuleFailed: (ruleId: string, originalError?: Error) =>
+      MetadataStorageError.saveRuleFailed(ruleId, originalError),
+    getRuleFailed: (ruleId: string, originalError?: Error) =>
+      MetadataStorageError.getRuleFailed(ruleId, originalError),
+    connectionFailed: (originalError?: Error) => MetadataStorageError.connectionFailed(originalError),
+    migrationFailed: (version?: string, originalError?: Error) =>
+      MetadataStorageError.migrationFailed(version, originalError),
   },
 };
 
