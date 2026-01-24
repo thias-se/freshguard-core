@@ -112,6 +112,55 @@ if (result.status === 'alert') {
 }
 ```
 
+## 📊 Metadata Storage
+
+FreshGuard tracks execution history for volume anomaly detection and monitoring analytics. Choose between **DuckDB** (embedded, zero-setup) or **PostgreSQL** (production-ready) storage.
+
+### Quick Setup (Zero Configuration)
+
+```typescript
+import { createMetadataStorage, checkVolumeAnomaly } from '@thias-se/freshguard-core';
+
+// Automatic setup - creates ./freshguard-metadata.db
+const metadataStorage = await createMetadataStorage();
+
+// Use with monitoring functions
+const result = await checkVolumeAnomaly(database, rule, metadataStorage);
+
+// Clean up
+await metadataStorage.close();
+```
+
+### Storage Options
+
+**DuckDB (Recommended for Self-Hosting)**
+- ✅ Zero database server setup
+- ✅ Single file storage (`./freshguard-metadata.db`)
+- ✅ Perfect for Docker containers
+
+```typescript
+// Custom path
+const storage = await createMetadataStorage({
+  type: 'duckdb',
+  path: './my-freshguard-data.db'
+});
+```
+
+**PostgreSQL (Recommended for Production)**
+- ✅ Full ACID compliance
+- ✅ Concurrent access support
+- ✅ Backup/restore capabilities
+
+```typescript
+// Production setup
+const storage = await createMetadataStorage({
+  type: 'postgresql',
+  url: 'postgresql://user:pass@host:5432/freshguard_metadata'
+});
+```
+
+**📋 [Complete Metadata Storage Guide →](docs/METADATA_STORAGE.md)**
+
 ### 🚨 Error Handling
 
 FreshGuard Core exports comprehensive error classes for proper error handling:

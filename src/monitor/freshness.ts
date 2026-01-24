@@ -14,6 +14,7 @@
 
 import type { CheckResult, MonitoringRule } from '../types.js';
 import type { Database } from '../db/index.js';
+import type { MetadataStorage } from '../metadata/interface.js';
 import { sql } from 'drizzle-orm';
 import { validateTableName, validateColumnName } from '../validators/index.js';
 import {
@@ -28,11 +29,13 @@ import {
  *
  * @param db - Database connection
  * @param rule - Monitoring rule configuration
+ * @param metadataStorage - Optional metadata storage for execution history
  * @returns CheckResult with freshness status and sanitized error messages
  */
 export async function checkFreshness(
   db: Database,
-  rule: MonitoringRule
+  rule: MonitoringRule,
+  metadataStorage?: MetadataStorage
 ): Promise<CheckResult> {
   const startTime = Date.now();
 
@@ -72,21 +75,45 @@ export async function checkFreshness(
 
     // If table is empty, return alert with sanitized message
     if (rowCount === 0) {
+      const executedAt = new Date();
+      const executionDurationMs = Date.now() - startTime;
+
+      await saveExecutionResult(metadataStorage, {
+        ruleId: rule.id,
+        status: 'alert',
+        rowCount: 0,
+        executionDurationMs,
+        executedAt,
+        error: 'Table is empty',
+      });
+
       return createSecureCheckResult('alert', {
         rowCount: 0,
         error: 'Table is empty',
-        executionDurationMs: Date.now() - startTime,
-        executedAt: new Date(),
+        executionDurationMs,
+        executedAt,
       });
     }
 
     // If no timestamp found, return alert
     if (!lastUpdate) {
+      const executedAt = new Date();
+      const executionDurationMs = Date.now() - startTime;
+
+      await saveExecutionResult(metadataStorage, {
+        ruleId: rule.id,
+        status: 'alert',
+        rowCount,
+        executionDurationMs,
+        executedAt,
+        error: 'No timestamp found in specified column',
+      });
+
       return createSecureCheckResult('alert', {
         rowCount,
         error: 'No timestamp found in specified column',
-        executionDurationMs: Date.now() - startTime,
-        executedAt: new Date(),
+        executionDurationMs,
+        executedAt,
       });
     }
 
@@ -104,24 +131,82 @@ export async function checkFreshness(
 
     // Determine status
     const isStale = lagMinutes > toleranceMinutes;
+    const status = isStale ? 'alert' : 'ok';
+    const executedAt = new Date();
+    const executionDurationMs = Date.now() - startTime;
+    const safeLagMinutes = Math.max(0, lagMinutes); // Ensure non-negative
 
-    return createSecureCheckResult(isStale ? 'alert' : 'ok', {
+    await saveExecutionResult(metadataStorage, {
+      ruleId: rule.id,
+      status,
+      rowCount,
+      lagMinutes: safeLagMinutes,
+      executionDurationMs,
+      executedAt,
+    });
+
+    return createSecureCheckResult(status, {
       rowCount,
       lastUpdate: new Date(lastUpdate),
-      lagMinutes: Math.max(0, lagMinutes), // Ensure non-negative
-      executionDurationMs: Date.now() - startTime,
-      executedAt: new Date(),
+      lagMinutes: safeLagMinutes,
+      executionDurationMs,
+      executedAt,
     });
 
   } catch (error) {
     // Use secure error handling to prevent information disclosure
     const userMessage = ErrorHandler.getUserMessage(error);
+    const executedAt = new Date();
+    const executionDurationMs = Date.now() - startTime;
+
+    if (rule?.id) {
+      await saveExecutionResult(metadataStorage, {
+        ruleId: rule.id,
+        status: 'failed',
+        executionDurationMs,
+        executedAt,
+        error: userMessage,
+      });
+    }
 
     return createSecureCheckResult('failed', {
       error: userMessage,
-      executionDurationMs: Date.now() - startTime,
-      executedAt: new Date(),
+      executionDurationMs,
+      executedAt,
     });
+  }
+}
+
+/**
+ * Save execution result to metadata storage with error handling
+ */
+async function saveExecutionResult(
+  metadataStorage: MetadataStorage | undefined,
+  execution: {
+    ruleId: string;
+    status: 'ok' | 'alert' | 'failed';
+    rowCount?: number;
+    lagMinutes?: number;
+    executionDurationMs: number;
+    executedAt: Date;
+    error?: string;
+  }
+): Promise<void> {
+  if (!metadataStorage) return;
+
+  try {
+    await metadataStorage.saveExecution({
+      ruleId: execution.ruleId,
+      status: execution.status,
+      rowCount: execution.rowCount,
+      lagMinutes: execution.lagMinutes,
+      executionDurationMs: execution.executionDurationMs,
+      executedAt: execution.executedAt,
+      error: execution.error,
+    });
+  } catch (error) {
+    // Don't fail the entire check if metadata storage fails
+    console.warn(`Failed to save execution history: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 

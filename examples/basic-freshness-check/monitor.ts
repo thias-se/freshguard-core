@@ -18,10 +18,13 @@ import {
   createDatabase,
   checkFreshness,
   checkVolumeAnomaly,
+  createMetadataStorage,
   type Database,
   type MonitoringRule,
-  type CheckResult
-} from '@thias-se/freshguard-core';
+  type CheckResult,
+  type MetadataStorage
+  } from '../../dist';
+//} from '@thias-se/freshguard-core';
 import { config } from 'dotenv';
 
 // Load environment variables
@@ -97,6 +100,7 @@ async function main(): Promise<void> {
 
   let connector: PostgresConnector;
   let database: Database;
+  let metadataStorage: MetadataStorage;
 
   try {
     // Create secure database connector with Phase 2 security features
@@ -115,6 +119,11 @@ async function main(): Promise<void> {
     database = createDatabase(connectionString);
     console.log('✅ Database instance created\n');
 
+    // Create metadata storage for execution history
+    console.log('📊 Creating metadata storage...');
+    metadataStorage = await createMetadataStorage(); // Uses DuckDB by default
+    console.log('✅ Metadata storage initialized\n');
+
     // Run monitoring checks for each rule
     const results: Array<{ rule: MonitoringRule; result: CheckResult }> = [];
 
@@ -129,10 +138,10 @@ async function main(): Promise<void> {
 
         if (rule.ruleType === 'freshness') {
           // Use secure freshness check with automatic query analysis
-          result = await checkFreshness(database, rule);
+          result = await checkFreshness(database, rule, metadataStorage);
         } else if (rule.ruleType === 'volume_anomaly') {
           // Use secure volume anomaly detection
-          result = await checkVolumeAnomaly(database, rule);
+          result = await checkVolumeAnomaly(database, rule, metadataStorage);
         } else {
           throw new Error(`Unknown rule type: ${rule.ruleType}`);
         }
@@ -185,6 +194,11 @@ async function main(): Promise<void> {
     }
 
     process.exit(1);
+  } finally {
+    // Clean up resources
+    if (metadataStorage) {
+      await metadataStorage.close();
+    }
   }
 }
 

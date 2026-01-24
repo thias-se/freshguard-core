@@ -15,8 +15,8 @@
 
 import type { CheckResult, MonitoringRule } from '../types.js';
 import type { Database } from '../db/index.js';
-import { sql, desc } from 'drizzle-orm';
-import { checkExecutions } from '../db/schema.js';
+import type { MetadataStorage } from '../metadata/interface.js';
+import { sql } from 'drizzle-orm';
 import { validateTableName } from '../validators/index.js';
 import {
   QueryError,
@@ -31,11 +31,13 @@ import {
  *
  * @param db - Database connection
  * @param rule - Monitoring rule configuration
+ * @param metadataStorage - Metadata storage for historical data
  * @returns CheckResult with volume anomaly status and sanitized error messages
  */
 export async function checkVolumeAnomaly(
   db: Database,
-  rule: MonitoringRule
+  rule: MonitoringRule,
+  metadataStorage?: MetadataStorage
 ): Promise<CheckResult> {
   const startTime = Date.now();
 
@@ -62,30 +64,68 @@ export async function checkVolumeAnomaly(
 
     // Skip check if below minimum threshold
     if (currentRowCount < minimumRowCount) {
+      const executedAt = new Date();
+      const executionDurationMs = Date.now() - startTime;
+
+      await saveExecutionResult(metadataStorage, {
+        ruleId: rule.id,
+        status: 'ok',
+        rowCount: currentRowCount,
+        deviation: 0,
+        baselineAverage: currentRowCount,
+        executionDurationMs,
+        executedAt,
+      });
+
       return createSecureCheckResult('ok', {
         rowCount: currentRowCount,
         deviation: 0,
         baselineAverage: currentRowCount,
-        executionDurationMs: Date.now() - startTime,
-        executedAt: new Date(),
+        executionDurationMs,
+        executedAt,
       });
     }
 
-    // Get historical data with security controls
-    const historicalData = await executeWithTimeout(
-      () => getHistoricalData(db, rule.id, baselineWindowDays),
-      30000, // 30 second timeout
-      'Volume check historical data query timeout'
-    );
+    // Get historical data with graceful fallback
+    let historicalData: { rowCount: number }[] = [];
+    if (metadataStorage) {
+      try {
+        const executions = await executeWithTimeout(
+          () => metadataStorage.getHistoricalData(rule.id, baselineWindowDays),
+          30000,
+          'Volume check historical data query timeout'
+        );
+        historicalData = executions
+          .filter(e => e.rowCount !== undefined)
+          .map(e => ({ rowCount: e.rowCount! }));
+      } catch (error) {
+        // Graceful fallback: treat as fresh installation with no history
+        console.warn(`Metadata storage unavailable, treating as fresh installation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        historicalData = [];
+      }
+    }
 
     // If not enough historical data, return ok (can't determine baseline yet)
     if (historicalData.length < 3) {
+      const executedAt = new Date();
+      const executionDurationMs = Date.now() - startTime;
+
+      await saveExecutionResult(metadataStorage, {
+        ruleId: rule.id,
+        status: 'ok',
+        rowCount: currentRowCount,
+        deviation: 0,
+        baselineAverage: currentRowCount,
+        executionDurationMs,
+        executedAt,
+      });
+
       return createSecureCheckResult('ok', {
         rowCount: currentRowCount,
         deviation: 0,
         baselineAverage: currentRowCount,
-        executionDurationMs: Date.now() - startTime,
-        executedAt: new Date(),
+        executionDurationMs,
+        executedAt,
       });
     }
 
@@ -94,24 +134,85 @@ export async function checkVolumeAnomaly(
 
     // Determine if this is an anomaly
     const isAnomaly = baseline.deviationPercent > deviationThresholdPercent;
+    const status = isAnomaly ? 'alert' : 'ok';
+    const executedAt = new Date();
+    const executionDurationMs = Date.now() - startTime;
 
-    return createSecureCheckResult(isAnomaly ? 'alert' : 'ok', {
+    // Save execution result to metadata storage
+    await saveExecutionResult(metadataStorage, {
+      ruleId: rule.id,
+      status,
       rowCount: currentRowCount,
       deviation: baseline.deviationPercent,
       baselineAverage: baseline.mean,
-      executionDurationMs: Date.now() - startTime,
-      executedAt: new Date(),
+      executionDurationMs,
+      executedAt,
+    });
+
+    return createSecureCheckResult(status, {
+      rowCount: currentRowCount,
+      deviation: baseline.deviationPercent,
+      baselineAverage: baseline.mean,
+      executionDurationMs,
+      executedAt,
     });
 
   } catch (error) {
     // Use secure error handling to prevent information disclosure
     const userMessage = ErrorHandler.getUserMessage(error);
+    const executedAt = new Date();
+    const executionDurationMs = Date.now() - startTime;
+
+    if (rule?.id) {
+      await saveExecutionResult(metadataStorage, {
+        ruleId: rule.id,
+        status: 'failed',
+        executionDurationMs,
+        executedAt,
+        error: userMessage,
+      });
+    }
 
     return createSecureCheckResult('failed', {
       error: userMessage,
-      executionDurationMs: Date.now() - startTime,
-      executedAt: new Date(),
+      executionDurationMs,
+      executedAt,
     });
+  }
+}
+
+/**
+ * Save execution result to metadata storage with error handling
+ */
+async function saveExecutionResult(
+  metadataStorage: MetadataStorage | undefined,
+  execution: {
+    ruleId: string;
+    status: 'ok' | 'alert' | 'failed';
+    rowCount?: number;
+    deviation?: number;
+    baselineAverage?: number;
+    executionDurationMs: number;
+    executedAt: Date;
+    error?: string;
+  }
+): Promise<void> {
+  if (!metadataStorage) return;
+
+  try {
+    await metadataStorage.saveExecution({
+      ruleId: execution.ruleId,
+      status: execution.status,
+      rowCount: execution.rowCount,
+      deviation: execution.deviation,
+      baselineAverage: execution.baselineAverage,
+      executionDurationMs: execution.executionDurationMs,
+      executedAt: execution.executedAt,
+      error: execution.error,
+    });
+  } catch (error) {
+    // Don't fail the entire check if metadata storage fails
+    console.warn(`Failed to save execution history: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -209,63 +310,6 @@ async function getCurrentRowCount(db: Database, tableName: string): Promise<numb
   }
 }
 
-/**
- * Get historical data with access controls and validation
- */
-async function getHistoricalData(
-  db: Database,
-  ruleId: string,
-  baselineWindowDays: number
-): Promise<{ rowCount: number }[]> {
-  try {
-    // Calculate cutoff date safely
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - baselineWindowDays);
-
-    // Validate cutoff date is reasonable
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-    if (cutoffDate < oneYearAgo) {
-      throw new ConfigurationError('Baseline window too large (max 365 days)');
-    }
-
-    const historicalData = await db
-      .select({
-        rowCount: checkExecutions.rowCount,
-      })
-      .from(checkExecutions)
-      .where(
-        sql`${checkExecutions.ruleId} = ${ruleId} AND ${checkExecutions.executedAt} >= ${cutoffDate} AND ${checkExecutions.status} = 'ok' AND ${checkExecutions.rowCount} IS NOT NULL`
-      )
-      .orderBy(desc(checkExecutions.executedAt))
-      .limit(1000); // Limit to prevent memory exhaustion
-
-    // Convert and validate historical data
-    const validatedData: { rowCount: number }[] = [];
-
-    for (const item of historicalData) {
-      if (item.rowCount === null || item.rowCount === undefined) {
-        continue; // Skip null values
-      }
-
-      const count = Number(item.rowCount);
-      if (isNaN(count) || count < 0 || count > Number.MAX_SAFE_INTEGER) {
-        continue; // Skip invalid values
-      }
-
-      validatedData.push({ rowCount: count });
-    }
-
-    return validatedData;
-  } catch (error) {
-    throw new QueryError(
-      'Failed to retrieve historical data',
-      'volume_history',
-      undefined,
-      error instanceof Error ? error : undefined
-    );
-  }
-}
 
 /**
  * Calculate baseline statistics with security validation

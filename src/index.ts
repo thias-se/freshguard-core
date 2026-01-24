@@ -18,6 +18,10 @@ export { PostgresConnector, DuckDBConnector, BigQueryConnector, SnowflakeConnect
 export { createDatabase, schema } from './db/index.js';
 export type { Database } from './db/index.js';
 
+// Export metadata storage abstraction
+export { createMetadataStorage, DuckDBMetadataStorage, PostgreSQLMetadataStorage } from './metadata/index.js';
+export type { MetadataStorage, MetadataStorageConfig } from './metadata/index.js';
+
 // Export error classes for proper error handling
 export {
   FreshGuardError,
