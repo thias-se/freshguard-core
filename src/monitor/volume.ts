@@ -22,9 +22,10 @@ import {
   QueryError,
   TimeoutError,
   ConfigurationError,
-  MonitoringError,
   ErrorHandler
 } from '../errors/index.js';
+import { BaselineConfigResolver } from './baseline-config.js';
+import { BaselineCalculator } from './baseline-calculator.js';
 
 /**
  * Check volume anomaly for a given rule with security validation
@@ -39,33 +40,40 @@ export async function checkVolumeAnomaly(
   rule: MonitoringRule,
   metadataStorage?: MetadataStorage
 ): Promise<CheckResult> {
-  const startTime = Date.now();
+  const startTime = process.hrtime.bigint();
 
   try {
     // Validate input parameters for security
     validateVolumeRule(rule);
 
-    const baselineWindowDays = rule.baselineWindowDays || 30;
-    const deviationThresholdPercent = rule.deviationThresholdPercent || 20;
-    const minimumRowCount = rule.minimumRowCount || 0;
+    // Resolve baseline configuration with enhanced options and backwards compatibility
+    const baselineConfigResolver = new BaselineConfigResolver(rule);
+    const baselineConfig = baselineConfigResolver.getConfig();
+
+    // Extract commonly used values for backwards compatibility
+    const baselineWindowDays = baselineConfig.windowDays;
+    const deviationThresholdPercent = baselineConfig.deviationThresholdPercent;
+    const minimumRowCount = baselineConfig.minimumRowCount;
+    const timeoutMs = baselineConfig.timeoutSeconds * 1000;
 
     // Validate table name to prevent SQL injection
     validateTableName(rule.tableName);
 
-    // Validate configuration parameters
+    // Validate configuration parameters (now handled by BaselineConfigResolver)
+    // But keep legacy validation for backwards compatibility
     validateVolumeParameters(baselineWindowDays, deviationThresholdPercent, minimumRowCount);
 
     // Get current row count with timeout protection
     const currentRowCount = await executeWithTimeout(
       () => getCurrentRowCount(db, rule.tableName),
-      30000, // 30 second timeout
+      timeoutMs,
       'Volume check row count query timeout'
     );
 
     // Skip check if below minimum threshold
     if (currentRowCount < minimumRowCount) {
       const executedAt = new Date();
-      const executionDurationMs = Date.now() - startTime;
+      const executionDurationMs = Number(process.hrtime.bigint() - startTime) / 1000000;
 
       await saveExecutionResult(metadataStorage, {
         ruleId: rule.id,
@@ -87,28 +95,29 @@ export async function checkVolumeAnomaly(
     }
 
     // Get historical data with graceful fallback
-    let historicalData: { rowCount: number }[] = [];
+    let historicalExecutions: import('../metadata/types.js').CheckExecution[] = [];
     if (metadataStorage) {
       try {
-        const executions = await executeWithTimeout(
+        historicalExecutions = await executeWithTimeout(
           () => metadataStorage.getHistoricalData(rule.id, baselineWindowDays),
-          30000,
+          timeoutMs,
           'Volume check historical data query timeout'
         );
-        historicalData = executions
-          .filter(e => e.rowCount !== undefined)
-          .map(e => ({ rowCount: e.rowCount! }));
       } catch (error) {
         // Graceful fallback: treat as fresh installation with no history
         console.warn(`Metadata storage unavailable, treating as fresh installation: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        historicalData = [];
+        historicalExecutions = [];
       }
     }
 
+    // Calculate baseline using enhanced calculator
+    const baselineCalculator = new BaselineCalculator(baselineConfig);
+    const baselineResult = baselineCalculator.calculateBaseline(historicalExecutions, currentRowCount);
+
     // If not enough historical data, return ok (can't determine baseline yet)
-    if (historicalData.length < 3) {
+    if (baselineResult.dataPointsUsed < baselineConfig.minimumDataPoints) {
       const executedAt = new Date();
-      const executionDurationMs = Date.now() - startTime;
+      const executionDurationMs = Number(process.hrtime.bigint() - startTime) / 1000000;
 
       await saveExecutionResult(metadataStorage, {
         ruleId: rule.id,
@@ -129,30 +138,27 @@ export async function checkVolumeAnomaly(
       });
     }
 
-    // Calculate baseline statistics with security validation
-    const baseline = calculateSecureBaseline(historicalData, currentRowCount);
-
-    // Determine if this is an anomaly
-    const isAnomaly = baseline.deviationPercent > deviationThresholdPercent;
+    // Determine if this is an anomaly using enhanced baseline result
+    const isAnomaly = baselineResult.deviationPercent > deviationThresholdPercent;
     const status = isAnomaly ? 'alert' : 'ok';
     const executedAt = new Date();
-    const executionDurationMs = Date.now() - startTime;
+    const executionDurationMs = Number(process.hrtime.bigint() - startTime) / 1000000;
 
     // Save execution result to metadata storage
     await saveExecutionResult(metadataStorage, {
       ruleId: rule.id,
       status,
       rowCount: currentRowCount,
-      deviation: baseline.deviationPercent,
-      baselineAverage: baseline.mean,
+      deviation: baselineResult.deviationPercent,
+      baselineAverage: baselineResult.mean,
       executionDurationMs,
       executedAt,
     });
 
     return createSecureCheckResult(status, {
       rowCount: currentRowCount,
-      deviation: baseline.deviationPercent,
-      baselineAverage: baseline.mean,
+      deviation: baselineResult.deviationPercent,
+      baselineAverage: baselineResult.mean,
       executionDurationMs,
       executedAt,
     });
@@ -161,7 +167,7 @@ export async function checkVolumeAnomaly(
     // Use secure error handling to prevent information disclosure
     const userMessage = ErrorHandler.getUserMessage(error);
     const executedAt = new Date();
-    const executionDurationMs = Date.now() - startTime;
+    const executionDurationMs = Number(process.hrtime.bigint() - startTime) / 1000000;
 
     if (rule?.id) {
       await saveExecutionResult(metadataStorage, {
@@ -311,58 +317,6 @@ async function getCurrentRowCount(db: Database, tableName: string): Promise<numb
 }
 
 
-/**
- * Calculate baseline statistics with security validation
- */
-function calculateSecureBaseline(
-  historicalData: { rowCount: number }[],
-  currentRowCount: number
-): { mean: number; deviationPercent: number } {
-  try {
-    if (historicalData.length === 0) {
-      return { mean: currentRowCount, deviationPercent: 0 };
-    }
-
-    // Extract row counts and validate
-    const historicalCounts = historicalData.map((h) => h.rowCount);
-
-    // Check for statistical validity
-    if (historicalCounts.some(count => isNaN(count) || count < 0)) {
-      throw new MonitoringError('Invalid historical data detected', 'volume', undefined, undefined);
-    }
-
-    // Calculate mean safely (avoid overflow)
-    const sum = historicalCounts.reduce((a, b) => {
-      const result = a + b;
-      if (result > Number.MAX_SAFE_INTEGER) {
-        throw new MonitoringError('Historical data sum overflow', 'volume', undefined, undefined);
-      }
-      return result;
-    }, 0);
-
-    const mean = sum / historicalCounts.length;
-
-    // Calculate deviation percentage safely
-    let deviationPercent = 0;
-    if (mean > 0) {
-      const deviation = Math.abs(currentRowCount - mean);
-      deviationPercent = (deviation / mean) * 100;
-
-      // Validate result is reasonable
-      if (isNaN(deviationPercent) || deviationPercent === Infinity) {
-        deviationPercent = 0;
-      }
-    }
-
-    return {
-      mean: Math.round(mean),
-      deviationPercent: Math.round(deviationPercent * 100) / 100 // Round to 2 decimal places
-    };
-  } catch (error) {
-    // If calculation fails, return safe defaults
-    return { mean: currentRowCount, deviationPercent: 0 };
-  }
-}
 
 /**
  * Execute operation with timeout protection
@@ -388,10 +342,11 @@ async function executeWithTimeout<T>(
  * Create secure check result with consistent structure
  */
 function createSecureCheckResult(status: CheckResult['status'], data: Partial<CheckResult>): CheckResult {
+
   return {
+    ...data,
     status,
     executedAt: data.executedAt || new Date(),
-    executionDurationMs: data.executionDurationMs,
-    ...data
+    executionDurationMs: data.executionDurationMs
   };
 }

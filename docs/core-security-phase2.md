@@ -518,7 +518,6 @@ export interface LogEvent {
   level: 'debug' | 'info' | 'warn' | 'error';
   component: string;
   action: string;
-  workspaceId?: string;
   sourceId?: string;
   table?: string;
   duration?: number;
@@ -533,7 +532,6 @@ export class Logger {
       level: event.level,
       component: event.component,
       action: event.action,
-      workspace_id: event.workspaceId,
       source_id: event.sourceId,
       table: event.table,
       duration_ms: event.duration,

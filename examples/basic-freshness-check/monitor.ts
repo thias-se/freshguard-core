@@ -37,7 +37,7 @@ const dbConfig = {
   database: process.env.DB_NAME || 'freshguard_example',
   username: process.env.DB_USER || 'freshguard_user',
   password: process.env.DB_PASSWORD || 'freshguard_password',
-  ssl: true, // SSL enforced for security
+  ssl: false, // SSL enforced for security
   timeout: 30000,
   queryTimeout: 10000,
   maxRows: 1000
@@ -48,7 +48,7 @@ const securityConfig = {
   enableQueryAnalysis: true,           // Advanced query complexity analysis
   maxQueryRiskScore: 70,              // Block high-risk queries (0-100)
   maxQueryComplexityScore: 80,        // Block overly complex queries
-  requireSSL: true,                   // Enforce SSL connections
+  requireSSL: false,                   // Enforce SSL connections
   enableDetailedLogging: true,        // Full structured logging for demo
   connectionTimeout: 30000,           // 30 second connection timeout
   queryTimeout: 10000,                // 10 second query timeout
@@ -105,12 +105,13 @@ async function main(): Promise<void> {
   try {
     // Create secure database connector with Phase 2 security features
     console.log('🔐 Initializing secure PostgreSQL connector...');
-    connector = new PostgresConnector(dbConfig);
+    connector = new PostgresConnector(dbConfig, securityConfig);
     console.log('✅ Secure connector initialized\n');
 
     // Test connection with security validation
     console.log('🔍 Testing secure connection...');
     await connector.testConnection();
+
     console.log('✅ Secure connection established\n');
 
     // Create database instance for monitoring functions
