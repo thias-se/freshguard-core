@@ -340,15 +340,20 @@ describe('Debug-Enhanced Freshness Monitoring', () => {
 
       // Check that console.log was called with debug information
       const calls = (console.log as MockedFunction<any>).mock.calls;
+      console.error('DEBUG: All console.log calls:', calls.map(c => c[0]));
+
       const debugCall = calls.find(call =>
-        typeof call[0] === 'string' && call[0].includes('[DEBUG]')
+        typeof call[0] === 'string' && call[0].includes('[DEBUG-')
       );
 
       expect(debugCall).toBeDefined();
-      expect(debugCall[1]).toMatchObject({
-        table: 'orders',
-        ruleId: 'test-freshness-rule'
-      });
+      if (debugCall) {
+        console.error('DEBUG: Found debug call:', debugCall);
+        expect(debugCall[1]).toMatchObject({
+          table: 'orders',
+          ruleId: 'test-freshness-rule'
+        });
+      }
     });
 
     it('should hide query in logs when exposeQueries is false', async () => {
@@ -386,15 +391,20 @@ describe('Debug-Enhanced Freshness Monitoring', () => {
 
       // Check that console.error was called with debug information
       const calls = (console.error as MockedFunction<any>).mock.calls;
+      console.warn('DEBUG: All console.error calls:', calls.map(c => c[0]));
+
       const debugCall = calls.find(call =>
-        typeof call[0] === 'string' && call[0].includes('[DEBUG]')
+        typeof call[0] === 'string' && call[0].includes('[DEBUG-')
       );
 
       expect(debugCall).toBeDefined();
-      expect(debugCall[1]).toMatchObject({
-        table: 'orders',
-        ruleId: 'test-freshness-rule'
-      });
+      if (debugCall) {
+        console.warn('DEBUG: Found error debug call:', debugCall);
+        expect(debugCall[1]).toMatchObject({
+          table: 'orders',
+          ruleId: 'test-freshness-rule'
+        });
+      }
     });
   });
 
