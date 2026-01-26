@@ -216,11 +216,24 @@ export class BigQueryConnector extends BaseConnector {
   /**
    * Test database connection with security validation
    */
-  async testConnection(): Promise<boolean> {
+  async testConnection(debugConfig?: import('../types.js').DebugConfig): Promise<boolean> {
+    const mergedDebugConfig = this.mergeDebugConfig(debugConfig);
+    const debugId = `bq-test-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 5)}`;
+    const startTime = performance.now();
+
     try {
+      this.logDebugInfo(mergedDebugConfig, debugId, 'Starting BigQuery connection test', {
+        projectId: this.projectId,
+        location: this.location
+      });
+
       await this.connect();
 
       if (!this.client) {
+        this.logDebugError(mergedDebugConfig, debugId, 'BigQuery connection test', {
+          error: 'Client not available after connect',
+          duration: performance.now() - startTime
+        });
         return false;
       }
 
@@ -232,11 +245,85 @@ export class BigQueryConnector extends BaseConnector {
         this.connectionTimeout
       );
 
+      const duration = performance.now() - startTime;
+
+      if (mergedDebugConfig?.enabled) {
+        console.log(`[DEBUG-${debugId}] BigQuery connection test completed:`, {
+          success: true,
+          duration,
+          projectId: this.projectId,
+          location: this.location
+        });
+      }
+
       return true;
     } catch (error) {
+      const duration = performance.now() - startTime;
+
+      this.logDebugError(mergedDebugConfig, debugId, 'BigQuery connection test', {
+        projectId: this.projectId,
+        location: this.location,
+        error: mergedDebugConfig?.exposeRawErrors && error instanceof Error ? error.message : 'Connection failed',
+        duration,
+        suggestion: this.generateBigQueryConnectionSuggestion(error)
+      });
+
       // Don't throw - this method should return boolean
       return false;
     }
+  }
+
+  /**
+   * Helper method to merge debug configuration
+   */
+  private mergeDebugConfig(debugConfig?: import('../types.js').DebugConfig) {
+    return {
+      enabled: debugConfig?.enabled ?? (process.env.NODE_ENV === 'development'),
+      exposeQueries: debugConfig?.exposeQueries ?? true,
+      exposeRawErrors: debugConfig?.exposeRawErrors ?? true,
+      logLevel: debugConfig?.logLevel ?? 'debug'
+    };
+  }
+
+  /**
+   * Generate BigQuery-specific connection suggestions based on error
+   */
+  private generateBigQueryConnectionSuggestion(error: unknown): string {
+    if (!(error instanceof Error)) {
+      return 'Check BigQuery project configuration and permissions';
+    }
+
+    const message = error.message.toLowerCase();
+
+    if (message.includes('project not found') || message.includes('invalid project')) {
+      return `Project '${this.projectId}' not found or inaccessible. Verify project ID and ensure proper access permissions.`;
+    }
+
+    if (message.includes('permission denied') || message.includes('access denied')) {
+      return `Permission denied for project '${this.projectId}'. Ensure service account has BigQuery Data Viewer or Editor role.`;
+    }
+
+    if (message.includes('authentication') || message.includes('credentials')) {
+      return `Authentication failed. Check service account key file or default application credentials (gcloud auth).`;
+    }
+
+    if (message.includes('quota') || message.includes('limit')) {
+      return `BigQuery quota exceeded for project '${this.projectId}'. Check project quotas in GCP Console.`;
+    }
+
+    if (message.includes('dataset') && message.includes('not found')) {
+      return `Dataset not found in project '${this.projectId}'. Verify dataset name and location are correct.`;
+    }
+
+    if (message.includes('location') || message.includes('region')) {
+      return `Location/region issue. Ensure dataset location '${this.location}' is correct and accessible.`;
+    }
+
+    if (message.includes('billing')) {
+      return `Billing not enabled for project '${this.projectId}'. Enable billing in GCP Console to use BigQuery.`;
+    }
+
+    return `BigQuery connection failed for project '${this.projectId}'. Check project ID, credentials, and billing status.`;
   }
 
   /**

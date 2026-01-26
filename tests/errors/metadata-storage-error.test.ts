@@ -304,6 +304,8 @@ describe('MetadataStorageError', () => {
         code: 'METADATA_STORAGE_FAILED',
         timestamp: error.timestamp.toISOString(),
         sanitized: true,
+        debugId: expect.any(String),
+        debug: undefined
       });
     });
   });

@@ -128,11 +128,26 @@ export class PostgresConnector extends BaseConnector {
   /**
    * Test database connection with security validation
    */
-  async testConnection(): Promise<boolean> {
+  async testConnection(debugConfig?: import('../types.js').DebugConfig): Promise<boolean> {
+    const mergedDebugConfig = this.mergeDebugConfig(debugConfig);
+    const debugId = `pg-test-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 5)}`;
+    const startTime = performance.now();
+
     try {
+      this.logDebugInfo(mergedDebugConfig, debugId, 'Starting connection test', {
+        host: this.config.host,
+        port: this.config.port,
+        database: this.config.database,
+        ssl: this.config.ssl
+      });
+
       await this.connect();
 
       if (!this.client) {
+        this.logDebugError(mergedDebugConfig, debugId, 'Connection test', {
+          error: 'Client not available after connect',
+          duration: performance.now() - startTime
+        });
         return false;
       }
 
@@ -144,11 +159,78 @@ export class PostgresConnector extends BaseConnector {
         this.connectionTimeout
       );
 
+      const duration = performance.now() - startTime;
+
+      if (mergedDebugConfig?.enabled) {
+        console.log(`[DEBUG-${debugId}] Connection test completed:`, {
+          success: true,
+          duration,
+          host: this.config.host,
+          database: this.config.database
+        });
+      }
+
       return true;
     } catch (error) {
+      const duration = performance.now() - startTime;
+
+      this.logDebugError(mergedDebugConfig, debugId, 'Connection test', {
+        host: this.config.host,
+        port: this.config.port,
+        database: this.config.database,
+        error: mergedDebugConfig?.exposeRawErrors && error instanceof Error ? error.message : 'Connection failed',
+        duration,
+        suggestion: this.generateConnectionSuggestion(error)
+      });
+
       // Don't throw - this method should return boolean
       return false;
     }
+  }
+
+  /**
+   * Helper method to merge debug configuration
+   */
+  private mergeDebugConfig(debugConfig?: import('../types.js').DebugConfig) {
+    return {
+      enabled: debugConfig?.enabled ?? (process.env.NODE_ENV === 'development'),
+      exposeQueries: debugConfig?.exposeQueries ?? true,
+      exposeRawErrors: debugConfig?.exposeRawErrors ?? true,
+      logLevel: debugConfig?.logLevel ?? 'debug'
+    };
+  }
+
+  /**
+   * Generate connection suggestions based on error
+   */
+  private generateConnectionSuggestion(error: unknown): string {
+    if (!(error instanceof Error)) {
+      return 'Check database connection configuration';
+    }
+
+    const message = error.message.toLowerCase();
+
+    if (message.includes('connection refused')) {
+      return `PostgreSQL server at ${this.config.host}:${this.config.port} is not accepting connections. Verify the server is running and accessible.`;
+    }
+
+    if (message.includes('timeout')) {
+      return `Connection timeout to ${this.config.host}:${this.config.port}. Check network connectivity and server responsiveness.`;
+    }
+
+    if (message.includes('authentication failed')) {
+      return `Authentication failed for database '${this.config.database}'. Verify username, password, and database name.`;
+    }
+
+    if (message.includes('database') && message.includes('does not exist')) {
+      return `Database '${this.config.database}' not found on server. Check database name and create if necessary.`;
+    }
+
+    if (message.includes('ssl') || message.includes('tls')) {
+      return `SSL/TLS connection issue. Check SSL configuration and server certificate settings.`;
+    }
+
+    return `Connection failed to ${this.config.host}:${this.config.port}. Check host, port, credentials, and network connectivity.`;
   }
 
   /**

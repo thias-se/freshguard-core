@@ -204,11 +204,26 @@ export class SnowflakeConnector extends BaseConnector {
   /**
    * Test database connection with security validation
    */
-  async testConnection(): Promise<boolean> {
+  async testConnection(debugConfig?: import('../types.js').DebugConfig): Promise<boolean> {
+    const mergedDebugConfig = this.mergeDebugConfig(debugConfig);
+    const debugId = `sf-test-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 5)}`;
+    const startTime = performance.now();
+
     try {
+      this.logDebugInfo(mergedDebugConfig, debugId, 'Starting Snowflake connection test', {
+        account: this.account,
+        warehouse: this.warehouse,
+        database: this.database,
+        schema: this.schema
+      });
+
       await this.connect();
 
       if (!this.connection) {
+        this.logDebugError(mergedDebugConfig, debugId, 'Snowflake connection test', {
+          error: 'Connection not available after connect',
+          duration: performance.now() - startTime
+        });
         return false;
       }
 
@@ -217,11 +232,96 @@ export class SnowflakeConnector extends BaseConnector {
 
       await this.executeQuery(sql);
 
+      const duration = performance.now() - startTime;
+
+      if (mergedDebugConfig?.enabled) {
+        console.log(`[DEBUG-${debugId}] Snowflake connection test completed:`, {
+          success: true,
+          duration,
+          account: this.account,
+          database: this.database,
+          warehouse: this.warehouse
+        });
+      }
+
       return true;
     } catch (error) {
+      const duration = performance.now() - startTime;
+
+      this.logDebugError(mergedDebugConfig, debugId, 'Snowflake connection test', {
+        account: this.account,
+        warehouse: this.warehouse,
+        database: this.database,
+        schema: this.schema,
+        error: mergedDebugConfig?.exposeRawErrors && error instanceof Error ? error.message : 'Connection failed',
+        duration,
+        suggestion: this.generateSnowflakeConnectionSuggestion(error)
+      });
+
       // Don't throw - this method should return boolean
       return false;
     }
+  }
+
+  /**
+   * Helper method to merge debug configuration
+   */
+  private mergeDebugConfig(debugConfig?: import('../types.js').DebugConfig) {
+    return {
+      enabled: debugConfig?.enabled ?? (process.env.NODE_ENV === 'development'),
+      exposeQueries: debugConfig?.exposeQueries ?? true,
+      exposeRawErrors: debugConfig?.exposeRawErrors ?? true,
+      logLevel: debugConfig?.logLevel ?? 'debug'
+    };
+  }
+
+  /**
+   * Generate Snowflake-specific connection suggestions based on error
+   */
+  private generateSnowflakeConnectionSuggestion(error: unknown): string {
+    if (!(error instanceof Error)) {
+      return 'Check Snowflake connection configuration';
+    }
+
+    const message = error.message.toLowerCase();
+
+    if (message.includes('incorrect username or password')) {
+      return `Authentication failed for account '${this.account}'. Verify username and password are correct.`;
+    }
+
+    if (message.includes('account') && message.includes('not found')) {
+      return `Snowflake account '${this.account}' not found. Check account identifier and region (e.g., 'myorg-myaccount').`;
+    }
+
+    if (message.includes('warehouse') && message.includes('not exist')) {
+      return `Warehouse '${this.warehouse}' does not exist or is not accessible. Check warehouse name and permissions.`;
+    }
+
+    if (message.includes('database') && message.includes('not exist')) {
+      return `Database '${this.database}' does not exist or is not accessible. Check database name and permissions.`;
+    }
+
+    if (message.includes('schema') && message.includes('not exist')) {
+      return `Schema '${this.schema}' does not exist in database '${this.database}'. Check schema name and permissions.`;
+    }
+
+    if (message.includes('warehouse suspended') || message.includes('warehouse not running')) {
+      return `Warehouse '${this.warehouse}' is suspended or not running. Resume warehouse or check auto-suspend settings.`;
+    }
+
+    if (message.includes('network') || message.includes('timeout')) {
+      return `Network connectivity issue to Snowflake account '${this.account}'. Check firewall settings and network access policies.`;
+    }
+
+    if (message.includes('role') || message.includes('permission')) {
+      return `Permission denied. Check user roles and privileges for warehouse '${this.warehouse}' and database '${this.database}'.`;
+    }
+
+    if (message.includes('mfa') || message.includes('multi-factor')) {
+      return `MFA required but not provided. Configure MFA authentication for account '${this.account}'.`;
+    }
+
+    return `Snowflake connection failed to account '${this.account}'. Check account, credentials, and object permissions.`;
   }
 
   /**

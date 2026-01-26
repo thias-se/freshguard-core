@@ -18,13 +18,17 @@ export abstract class FreshGuardError extends Error {
   public readonly code: string;
   public readonly timestamp: Date;
   public readonly sanitized: boolean;
+  public readonly debugId: string;
+  public debug?: import('../types.js').DebugInfo;
 
-  constructor(message: string, code: string, sanitized = true) {
+  constructor(message: string, code: string, sanitized = true, debug?: import('../types.js').DebugInfo) {
     super(message);
     this.name = this.constructor.name;
     this.code = code;
     this.timestamp = new Date();
     this.sanitized = sanitized;
+    this.debugId = generateDebugId();
+    this.debug = debug;
 
     // Maintain proper stack trace (when available)
     if (Error.captureStackTrace) {
@@ -42,8 +46,17 @@ export abstract class FreshGuardError extends Error {
       code: this.code,
       timestamp: this.timestamp.toISOString(),
       sanitized: this.sanitized,
+      debugId: this.debugId,
+      debug: this.debug,
     };
   }
+}
+
+/**
+ * Generate a unique debug ID for error correlation
+ */
+function generateDebugId(): string {
+  return `fg-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 5)}`;
 }
 
 // ==============================================
@@ -230,10 +243,11 @@ export class QueryError extends FreshGuardError {
     message: string,
     queryType = 'unknown',
     table?: string,
-    originalError?: Error
+    originalError?: Error,
+    debug?: import('../types.js').DebugInfo
   ) {
     const sanitizedMessage = QueryError.sanitizeQueryError(message, originalError);
-    super(sanitizedMessage, 'QUERY_FAILED', true);
+    super(sanitizedMessage, 'QUERY_FAILED', true, debug);
     this.queryType = queryType;
     this.table = table;
   }

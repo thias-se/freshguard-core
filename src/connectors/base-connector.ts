@@ -20,6 +20,8 @@ import {
   SecurityError,
   TimeoutError
 } from '../errors/index.js';
+import { DebugErrorFactory, mergeDebugConfig } from '../errors/debug-factory.js';
+import type { DebugConfig } from '../types.js';
 
 import type { StructuredLogger} from '../observability/logger.js';
 import { createDatabaseLogger, logTimedOperation, type LogContext } from '../observability/logger.js';
@@ -826,10 +828,37 @@ export abstract class BaseConnector implements Connector {
   }
 
   /**
-   * Test database connection
+   * Test database connection with optional debug configuration
    * Subclasses implement with database-specific connection test
+   * @param debugConfig Optional debug configuration for enhanced error reporting
    */
-  abstract testConnection(): Promise<boolean>;
+  abstract testConnection(debugConfig?: DebugConfig): Promise<boolean>;
+
+  /**
+   * Helper method for subclasses to create debug-enabled error factory
+   */
+  protected createDebugErrorFactory(debugConfig?: DebugConfig): DebugErrorFactory {
+    const mergedConfig = mergeDebugConfig(debugConfig);
+    return new DebugErrorFactory(mergedConfig);
+  }
+
+  /**
+   * Helper method for subclasses to log debug information
+   */
+  protected logDebugInfo(debugConfig: DebugConfig | undefined, debugId: string, operation: string, context: Record<string, unknown>): void {
+    if (debugConfig?.enabled) {
+      console.log(`[DEBUG-${debugId}] ${operation}:`, context);
+    }
+  }
+
+  /**
+   * Helper method for subclasses to log debug errors
+   */
+  protected logDebugError(debugConfig: DebugConfig | undefined, debugId: string, operation: string, context: Record<string, unknown>): void {
+    if (debugConfig?.enabled) {
+      console.error(`[DEBUG-${debugId}] ${operation} failed:`, context);
+    }
+  }
 
   /**
    * List all tables in the database

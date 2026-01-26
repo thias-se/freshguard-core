@@ -13,17 +13,18 @@
  * @license MIT
  */
 
-import type { CheckResult, MonitoringRule } from '../types.js';
+import type { CheckResult, MonitoringRule, FreshGuardConfig, DebugConfig } from '../types.js';
 import type { Database } from '../db/index.js';
 import type { MetadataStorage } from '../metadata/interface.js';
 import { sql } from 'drizzle-orm';
 import { validateTableName } from '../validators/index.js';
 import {
-  QueryError,
   TimeoutError,
   ConfigurationError,
   ErrorHandler
 } from '../errors/index.js';
+import { DebugErrorFactory, mergeDebugConfig } from '../errors/debug-factory.js';
+import type { QueryContext } from '../errors/debug-factory.js';
 import { BaselineConfigResolver } from './baseline-config.js';
 import { BaselineCalculator } from './baseline-calculator.js';
 
@@ -33,16 +34,30 @@ import { BaselineCalculator } from './baseline-calculator.js';
  * @param db - Database connection
  * @param rule - Monitoring rule configuration
  * @param metadataStorage - Metadata storage for historical data
+ * @param config - Optional configuration including debug settings
  * @returns CheckResult with volume anomaly status and sanitized error messages
  */
 export async function checkVolumeAnomaly(
   db: Database,
   rule: MonitoringRule,
-  metadataStorage?: MetadataStorage
+  metadataStorage?: MetadataStorage,
+  config?: FreshGuardConfig
 ): Promise<CheckResult> {
   const startTime = process.hrtime.bigint();
+  const debugConfig = mergeDebugConfig(config?.debug);
+  const debugFactory = new DebugErrorFactory(debugConfig);
+  const debugId = `fg-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 5)}`;
 
   try {
+    // Log debug info at start
+    if (debugConfig.enabled) {
+      console.log(`[DEBUG-${debugId}] Starting volume anomaly check:`, {
+        table: rule.tableName,
+        ruleId: rule.id,
+        timestamp: new Date().toISOString()
+      });
+    }
+
     // Validate input parameters for security
     validateVolumeRule(rule);
 
@@ -65,8 +80,8 @@ export async function checkVolumeAnomaly(
 
     // Get current row count with timeout protection
     const currentRowCount = await executeWithTimeout(
-      () => getCurrentRowCount(db, rule.tableName),
-      timeoutMs,
+      () => getCurrentRowCount(db, rule.tableName, debugConfig, debugFactory),
+      config?.timeoutMs || timeoutMs,
       'Volume check row count query timeout'
     );
 
@@ -83,7 +98,7 @@ export async function checkVolumeAnomaly(
         baselineAverage: currentRowCount,
         executionDurationMs,
         executedAt,
-      });
+      }, debugConfig);
 
       return createSecureCheckResult('ok', {
         rowCount: currentRowCount,
@@ -104,8 +119,21 @@ export async function checkVolumeAnomaly(
           'Volume check historical data query timeout'
         );
       } catch (error) {
+        // Enhanced error logging for metadata retrieval failure
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+        if (debugConfig.enabled) {
+          console.error(`[DEBUG-${debugId}] Metadata storage unavailable:`, {
+            ruleId: rule.id,
+            error: errorMessage,
+            rawError: debugConfig.exposeRawErrors ? errorMessage : undefined,
+            fallback: 'treating as fresh installation'
+          });
+        } else {
+          console.warn(`Metadata storage unavailable, treating as fresh installation: ${errorMessage}`);
+        }
+
         // Graceful fallback: treat as fresh installation with no history
-        console.warn(`Metadata storage unavailable, treating as fresh installation: ${error instanceof Error ? error.message : 'Unknown error'}`);
         historicalExecutions = [];
       }
     }
@@ -127,7 +155,7 @@ export async function checkVolumeAnomaly(
         baselineAverage: currentRowCount,
         executionDurationMs,
         executedAt,
-      });
+      }, debugConfig);
 
       return createSecureCheckResult('ok', {
         rowCount: currentRowCount,
@@ -153,7 +181,7 @@ export async function checkVolumeAnomaly(
       baselineAverage: baselineResult.mean,
       executionDurationMs,
       executedAt,
-    });
+    }, debugConfig);
 
     return createSecureCheckResult(status, {
       rowCount: currentRowCount,
@@ -169,6 +197,17 @@ export async function checkVolumeAnomaly(
     const executedAt = new Date();
     const executionDurationMs = Number(process.hrtime.bigint() - startTime) / 1000000;
 
+    // Log debug error information
+    if (debugConfig.enabled) {
+      console.error(`[DEBUG-${debugId}] Volume anomaly check failed:`, {
+        table: rule.tableName,
+        ruleId: rule.id,
+        error: userMessage,
+        rawError: debugConfig.exposeRawErrors && error instanceof Error ? error.message : undefined,
+        duration: executionDurationMs
+      });
+    }
+
     if (rule?.id) {
       await saveExecutionResult(metadataStorage, {
         ruleId: rule.id,
@@ -176,14 +215,23 @@ export async function checkVolumeAnomaly(
         executionDurationMs,
         executedAt,
         error: userMessage,
-      });
+      }, debugConfig);
     }
 
-    return createSecureCheckResult('failed', {
+    // Create result with debug information
+    const result = createSecureCheckResult('failed', {
       error: userMessage,
       executionDurationMs,
       executedAt,
+      debugId,
     });
+
+    // Add debug information if available
+    if (debugConfig.enabled && error instanceof Error && 'debug' in error) {
+      result.debug = (error as any).debug;
+    }
+
+    return result;
   }
 }
 
@@ -201,7 +249,8 @@ async function saveExecutionResult(
     executionDurationMs: number;
     executedAt: Date;
     error?: string;
-  }
+  },
+  debugConfig?: DebugConfig
 ): Promise<void> {
   if (!metadataStorage) return;
 
@@ -217,8 +266,19 @@ async function saveExecutionResult(
       error: execution.error,
     });
   } catch (error) {
-    // Don't fail the entire check if metadata storage fails
-    console.warn(`Failed to save execution history: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    // Enhanced error logging instead of console.warn
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+    if (debugConfig?.enabled) {
+      console.error('[DEBUG] Failed to save volume execution history:', {
+        ruleId: execution.ruleId,
+        error: errorMessage,
+        rawError: debugConfig.exposeRawErrors ? errorMessage : undefined
+      });
+    } else {
+      // Production: use structured logging if available, fallback to console
+      console.warn(`Failed to save execution history for rule ${execution.ruleId}: ${errorMessage}`);
+    }
   }
 }
 
@@ -284,34 +344,79 @@ function validateVolumeParameters(
 /**
  * Get current row count with error handling
  */
-async function getCurrentRowCount(db: Database, tableName: string): Promise<number> {
+async function getCurrentRowCount(
+  db: Database,
+  tableName: string,
+  debugConfig: DebugConfig,
+  debugFactory: DebugErrorFactory
+): Promise<number> {
+  const startTime = performance.now();
+
   try {
     const countQuery = sql`SELECT COUNT(*) as row_count FROM ${sql.identifier(tableName)}`;
+    const queryString = `SELECT COUNT(*) as row_count FROM ${tableName}`;
+
+    const queryContext: QueryContext = {
+      sql: queryString,
+      params: [],
+      table: tableName,
+      operation: 'volume_count'
+    };
+
+    // Log query in debug mode
+    if (debugConfig.enabled) {
+      console.log(`[DEBUG] Executing volume count query:`, {
+        table: tableName,
+        query: debugConfig.exposeQueries ? queryContext.sql : '[SQL hidden]'
+      });
+    }
+
     const countResult = await db.execute(countQuery);
+    queryContext.duration = performance.now() - startTime;
 
     if (!countResult || countResult.length === 0) {
-      throw new QueryError('Row count query returned no results', 'volume_count', tableName);
+      throw debugFactory.createQueryError(
+        'Row count query returned no results',
+        undefined,
+        queryContext
+      );
     }
 
     const row = countResult[0] as { row_count: string };
     const rowCount = parseInt(row.row_count, 10);
 
     if (isNaN(rowCount) || rowCount < 0) {
-      throw new QueryError('Invalid row count returned from query', 'volume_count', tableName);
+      throw debugFactory.createQueryError(
+        'Invalid row count returned from query',
+        undefined,
+        queryContext
+      );
     }
 
     // Check for overflow protection (2^53 - 1 is safe integer limit)
     if (rowCount > Number.MAX_SAFE_INTEGER) {
-      throw new QueryError('Row count exceeds safe integer limit', 'volume_count', tableName);
+      throw debugFactory.createQueryError(
+        'Row count exceeds safe integer limit',
+        undefined,
+        queryContext
+      );
     }
 
     return rowCount;
   } catch (error) {
-    throw new QueryError(
+    const duration = performance.now() - startTime;
+    const queryContext: QueryContext = {
+      sql: `SELECT COUNT(*) as row_count FROM ${tableName}`,
+      params: [],
+      table: tableName,
+      operation: 'volume_count',
+      duration
+    };
+
+    throw debugFactory.createQueryError(
       'Failed to get current row count',
-      'volume_count',
-      tableName,
-      error instanceof Error ? error : undefined
+      error instanceof Error ? error : undefined,
+      queryContext
     );
   }
 }

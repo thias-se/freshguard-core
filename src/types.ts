@@ -121,6 +121,30 @@ export interface AlertDestination {
 }
 
 /**
+ * Debug information for development and troubleshooting
+ */
+export interface DebugInfo {
+  query?: string;                 // Actual SQL executed (if exposeQueries enabled)
+  params?: unknown[];             // Query parameters
+  rawError?: string;             // Original database error (if exposeRawErrors enabled)
+  suggestion?: string;           // Suggested fix for the issue
+  duration?: number;             // Query execution time in milliseconds
+  debugId?: string;              // Correlation ID for log tracing
+  context?: Record<string, unknown>; // Additional context
+}
+
+/**
+ * Debug configuration for enhanced error visibility
+ */
+export interface DebugConfig {
+  enabled?: boolean;              // Enable debug mode (auto-detected from NODE_ENV if not specified)
+  exposeQueries?: boolean;        // Include actual SQL queries in debug output
+  exposeRawErrors?: boolean;      // Include raw database error messages
+  logLevel?: 'error' | 'warn' | 'info' | 'debug'; // Minimum log level to output
+  correlationId?: string;         // Custom correlation ID for tracing
+}
+
+/**
  * Check execution result
  */
 export interface CheckResult {
@@ -135,6 +159,10 @@ export interface CheckResult {
   executionDurationMs?: number;
   executedAt: Date;
   nextCheckAt?: Date;
+
+  // Debug information (only populated in debug mode)
+  debugId?: string;               // Correlation ID for log tracing
+  debug?: DebugInfo;              // Enhanced debug information
 }
 
 /**
@@ -286,4 +314,8 @@ export interface FreshGuardConfig {
     enabled: boolean;
     timezone?: string;
   };
+
+  // Runtime configuration
+  timeoutMs?: number;             // Global timeout for operations
+  debug?: DebugConfig;            // Debug configuration for enhanced error visibility
 }

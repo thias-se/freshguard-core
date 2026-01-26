@@ -195,11 +195,25 @@ export class DuckDBConnector extends BaseConnector {
   /**
    * Test database connection with security validation
    */
-  async testConnection(): Promise<boolean> {
+  async testConnection(debugConfig?: import('../types.js').DebugConfig): Promise<boolean> {
+    const mergedDebugConfig = this.mergeDebugConfig(debugConfig);
+    const debugId = `duck-test-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 5)}`;
+    const startTime = performance.now();
+
     try {
+      this.logDebugInfo(mergedDebugConfig, debugId, 'Starting DuckDB connection test', {
+        databasePath: this.databasePath,
+        isFileDatabase: this.databasePath !== ':memory:' && !this.databasePath.startsWith('md:'),
+        isMemoryDatabase: this.databasePath === ':memory:'
+      });
+
       await this.connect();
 
       if (!this.connection) {
+        this.logDebugError(mergedDebugConfig, debugId, 'DuckDB connection test', {
+          error: 'Connection not available after connect',
+          duration: performance.now() - startTime
+        });
         return false;
       }
 
@@ -211,11 +225,92 @@ export class DuckDBConnector extends BaseConnector {
         this.connectionTimeout
       );
 
+      const duration = performance.now() - startTime;
+
+      if (mergedDebugConfig?.enabled) {
+        console.log(`[DEBUG-${debugId}] DuckDB connection test completed:`, {
+          success: true,
+          duration,
+          databasePath: this.databasePath,
+          type: this.databasePath === ':memory:' ? 'in-memory' : 'file'
+        });
+      }
+
       return true;
     } catch (error) {
+      const duration = performance.now() - startTime;
+
+      this.logDebugError(mergedDebugConfig, debugId, 'DuckDB connection test', {
+        databasePath: this.databasePath,
+        error: mergedDebugConfig?.exposeRawErrors && error instanceof Error ? error.message : 'Connection failed',
+        duration,
+        suggestion: this.generateDuckDBConnectionSuggestion(error)
+      });
+
       // Don't throw - this method should return boolean
       return false;
     }
+  }
+
+  /**
+   * Helper method to merge debug configuration
+   */
+  private mergeDebugConfig(debugConfig?: import('../types.js').DebugConfig) {
+    return {
+      enabled: debugConfig?.enabled ?? (process.env.NODE_ENV === 'development'),
+      exposeQueries: debugConfig?.exposeQueries ?? true,
+      exposeRawErrors: debugConfig?.exposeRawErrors ?? true,
+      logLevel: debugConfig?.logLevel ?? 'debug'
+    };
+  }
+
+  /**
+   * Generate DuckDB-specific connection suggestions based on error
+   */
+  private generateDuckDBConnectionSuggestion(error: unknown): string {
+    if (!(error instanceof Error)) {
+      return 'Check DuckDB database configuration';
+    }
+
+    const message = error.message.toLowerCase();
+
+    if (message.includes('no such file') || message.includes('file not found')) {
+      return `Database file '${this.databasePath}' not found. Check file path and ensure file exists with read permissions.`;
+    }
+
+    if (message.includes('permission denied') || message.includes('access denied')) {
+      return `Permission denied accessing '${this.databasePath}'. Check file permissions and directory access rights.`;
+    }
+
+    if (message.includes('database is locked') || message.includes('locked')) {
+      return `Database '${this.databasePath}' is locked by another process. Close other connections or wait for release.`;
+    }
+
+    if (message.includes('disk') || message.includes('space')) {
+      return `Disk space issue with database '${this.databasePath}'. Check available disk space and permissions.`;
+    }
+
+    if (message.includes('corrupt') || message.includes('malformed')) {
+      return `Database file '${this.databasePath}' appears to be corrupted. Consider restoring from backup or recreating.`;
+    }
+
+    if (message.includes('read-only') || message.includes('readonly')) {
+      return `Database '${this.databasePath}' is read-only. Check file permissions or mount options.`;
+    }
+
+    if (message.includes('too many connections')) {
+      return `Too many connections to database '${this.databasePath}'. Close unused connections and retry.`;
+    }
+
+    if (this.databasePath === ':memory:') {
+      return `In-memory database connection failed. This may indicate a DuckDB installation or memory issue.`;
+    }
+
+    if (this.databasePath.includes('/') || this.databasePath.includes('\\')) {
+      return `File path issue with '${this.databasePath}'. Verify directory exists and has proper permissions.`;
+    }
+
+    return `DuckDB connection failed for database '${this.databasePath}'. Check file path, permissions, and disk space.`;
   }
 
   /**
