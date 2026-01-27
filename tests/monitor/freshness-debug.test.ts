@@ -10,7 +10,8 @@
  * - Security preservation in production mode
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi, MockedFunction } from 'vitest';
+import type { MockedFunction } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { checkFreshness } from '../../src/monitor/freshness.js';
 import { DebugErrorFactory, mergeDebugConfig } from '../../src/errors/debug-factory.js';
 import type { MonitoringRule, FreshGuardConfig, DebugConfig } from '../../src/types.js';

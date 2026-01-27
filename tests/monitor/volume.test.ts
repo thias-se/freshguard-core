@@ -71,7 +71,7 @@ function createHistoricalExecution(rowCount: number, daysAgo: number): CheckExec
 }
 
 // Helper to create weekly pattern data
-function createWeeklyPatternData(weeks: number = 2): CheckExecution[] {
+function createWeeklyPatternData(weeks = 2): CheckExecution[] {
   const executions: CheckExecution[] = [];
   const baseDate = new Date('2024-01-01'); // Monday
 

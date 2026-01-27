@@ -43,7 +43,7 @@ export class SchemaBaselineManager {
       throw new ConfigurationError('Table name is required and must be a string');
     }
 
-    if (!schema || !schema.table || !Array.isArray(schema.columns)) {
+    if (!schema?.table || !Array.isArray(schema.columns)) {
       throw new ConfigurationError('Valid table schema is required');
     }
 

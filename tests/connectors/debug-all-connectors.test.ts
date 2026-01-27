@@ -98,9 +98,9 @@ describe('All Connectors Debug Enhancement', () => {
       const connector = new PostgresConnector(validPostgresConfig);
 
       // These methods should exist on the connector (from base class)
-      expect(connector['mergeDebugConfig']).toBeDefined();
-      expect(connector['logDebugInfo']).toBeDefined();
-      expect(connector['createDebugErrorFactory']).toBeDefined();
+      expect(connector.mergeDebugConfig).toBeDefined();
+      expect(connector.logDebugInfo).toBeDefined();
+      expect(connector.createDebugErrorFactory).toBeDefined();
     });
   });
 
@@ -126,8 +126,8 @@ describe('All Connectors Debug Enhancement', () => {
       expect(connector.setLocation).toBeDefined();
 
       // Should have debug helpers
-      expect(connector['mergeDebugConfig']).toBeDefined();
-      expect(connector['logDebugInfo']).toBeDefined();
+      expect(connector.mergeDebugConfig).toBeDefined();
+      expect(connector.logDebugInfo).toBeDefined();
     });
   });
 
@@ -157,8 +157,8 @@ describe('All Connectors Debug Enhancement', () => {
       expect(connector.getAccount()).toBe('test-account');
 
       // Should have debug helpers
-      expect(connector['mergeDebugConfig']).toBeDefined();
-      expect(connector['logDebugInfo']).toBeDefined();
+      expect(connector.mergeDebugConfig).toBeDefined();
+      expect(connector.logDebugInfo).toBeDefined();
     });
   });
 
@@ -188,8 +188,8 @@ describe('All Connectors Debug Enhancement', () => {
       expect(connector.getDatabasePath()).toBe(':memory:');
 
       // Should have debug helpers
-      expect(connector['mergeDebugConfig']).toBeDefined();
-      expect(connector['logDebugInfo']).toBeDefined();
+      expect(connector.mergeDebugConfig).toBeDefined();
+      expect(connector.logDebugInfo).toBeDefined();
     });
 
     it('should handle file database configuration', () => {
@@ -217,9 +217,9 @@ describe('All Connectors Debug Enhancement', () => {
         expect(typeof connector.testConnection).toBe('function');
 
         // Should have debug helper methods from base class
-        expect(connector['mergeDebugConfig']).toBeDefined();
-        expect(connector['logDebugInfo']).toBeDefined();
-        expect(connector['createDebugErrorFactory']).toBeDefined();
+        expect(connector.mergeDebugConfig).toBeDefined();
+        expect(connector.logDebugInfo).toBeDefined();
+        expect(connector.createDebugErrorFactory).toBeDefined();
       }
     });
 
@@ -255,7 +255,7 @@ describe('All Connectors Debug Enhancement', () => {
 
       // All should have debug factory creation method
       for (const connector of connectors) {
-        const factory = connector['createDebugErrorFactory']({ enabled: true });
+        const factory = connector.createDebugErrorFactory({ enabled: true });
         expect(factory).toBeDefined();
         expect(typeof factory.createConnectionError).toBe('function');
         expect(typeof factory.createQueryError).toBe('function');

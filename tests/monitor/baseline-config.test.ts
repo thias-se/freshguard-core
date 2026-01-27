@@ -258,7 +258,7 @@ describe('BaselineConfigResolver', () => {
       });
 
       it('should accept valid calculation methods', () => {
-        const methods: Array<'mean' | 'median' | 'trimmed_mean'> = ['mean', 'median', 'trimmed_mean'];
+        const methods: ('mean' | 'median' | 'trimmed_mean')[] = ['mean', 'median', 'trimmed_mean'];
 
         methods.forEach(method => {
           const rule: MonitoringRule = {

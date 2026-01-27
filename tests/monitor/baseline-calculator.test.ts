@@ -40,7 +40,7 @@ function createExecution(rowCount: number, daysAgo: number): CheckExecution {
 }
 
 // Helper to create executions for specific days of week
-function createWeeklyPattern(weekCount: number = 2): CheckExecution[] {
+function createWeeklyPattern(weekCount = 2): CheckExecution[] {
   const executions: CheckExecution[] = [];
   const baseDate = new Date('2024-01-01'); // Monday
 

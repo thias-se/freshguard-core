@@ -26,7 +26,7 @@ export class DuckDBMetadataStorage implements MetadataStorage {
   private instance?: DuckDBInstance;
   private connection?: DuckDBConnection;
 
-  constructor(private dbPath: string = './freshguard-metadata.db') {}
+  constructor(private readonly dbPath = './freshguard-metadata.db') {}
 
   async initialize(): Promise<void> {
     if (this.connection) return;

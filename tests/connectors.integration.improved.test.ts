@@ -79,7 +79,7 @@ const EXPECTED_TABLES = {
 };
 
 // Global test state
-let testResults = {
+const testResults = {
   postgres: {
     available: false,
     connector: null as PostgresConnector | null,

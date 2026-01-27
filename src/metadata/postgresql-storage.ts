@@ -34,7 +34,7 @@ export class PostgreSQLMetadataStorage implements MetadataStorage {
   // private _schemaConfig: ResolvedSchemaConfig;
 
   constructor(
-    private connectionUrl: string,
+    private readonly connectionUrl: string,
     metadataConfig?: MetadataStorageConfig
   ) {
     // Resolve schema configuration with defaults (for validation)

@@ -33,12 +33,10 @@ export interface BaselineResult {
 /**
  * Day of week statistics for seasonal adjustment
  */
-interface DayOfWeekStats {
-  [dayOfWeek: number]: {
+type DayOfWeekStats = Record<number, {
     mean: number;
     count: number;
-  };
-}
+  }>;
 
 /**
  * Enhanced baseline calculator
@@ -47,7 +45,7 @@ interface DayOfWeekStats {
  * weekend exclusion and seasonal adjustment for day-of-week patterns.
  */
 export class BaselineCalculator {
-  constructor(private config: ResolvedBaselineConfig) {}
+  constructor(private readonly config: ResolvedBaselineConfig) {}
 
   /**
    * Calculate baseline from historical check execution data

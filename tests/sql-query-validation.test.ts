@@ -281,7 +281,7 @@ describe('SQL Query Generation Validation', () => {
         if (query.includes('information_schema')) {
           // Even malformed information_schema queries might match the pattern
           // but should be caught by other validation
-          const isCompleteSQL = !query.match(/OR\s*$/);
+          const isCompleteSQL = !(/OR\s*$/.exec(query));
           expect(isCompleteSQL).toBe(false);
         }
       });
@@ -474,9 +474,9 @@ describe('SQL Query Generation Validation', () => {
 
       incompleteQueries.forEach((query, index) => {
         const isIncomplete =
-          query.match(/WHERE\s*$/) ||
-          query.match(/AND\s*$/) ||
-          query.match(/OR\s*$/);
+          (/WHERE\s*$/.exec(query)) ||
+          (/AND\s*$/.exec(query)) ||
+          (/OR\s*$/.exec(query));
         expect(isIncomplete).toBeTruthy(`Query ${index + 1} should be detected as incomplete: ${query}`);
       });
     });

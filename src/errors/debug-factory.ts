@@ -26,7 +26,7 @@ export interface QueryContext {
  * Enhanced error factory with debug capabilities
  */
 export class DebugErrorFactory {
-  constructor(private debugConfig?: DebugConfig) {}
+  constructor(private readonly debugConfig?: DebugConfig) {}
 
   /**
    * Create a query error with debug information
