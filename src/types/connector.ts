@@ -157,16 +157,22 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
   maxRows: 1000,
   requireSSL: true,
   allowedQueryPatterns: [
-    /^SELECT COUNT\(\*\) FROM/i,
-    /^SELECT MAX\(/i,
-    /^SELECT MIN\(/i,
-    /^DESCRIBE /i,
-    /^SHOW /i,
-    // Fixed: More robust patterns to handle various whitespace scenarios
-    /^SELECT\s+.+?\s+FROM\s+information_schema\./is,  // Non-greedy match with explicit whitespace
-    /^SELECT[\s\S]+?FROM[\s\S]+?information_schema\./is,  // Handle any whitespace including tabs/newlines
-    // BigQuery-specific pattern for backtick syntax
-    /^SELECT[\s\S]+?FROM[\s\S]*`[^`]*\.INFORMATION_SCHEMA\./is,  // BigQuery backtick syntax
+    // FreshGuard Core monitoring patterns (v0.9.1+) - Updated to handle all whitespace and quoted identifiers
+    /^SELECT\s+COUNT\(\*\)(?:\s+as\s+\w+)?\s+FROM\s+[`"]?\w+[`"]?$/is,                    // getRowCount: SELECT COUNT(*) [as alias] FROM table
+    /^SELECT\s+MAX\([`"]?\w+[`"]?\)(?:\s+as\s+\w+)?\s+FROM\s+[`"]?\w+[`"]?$/is,           // getMaxTimestamp: SELECT MAX(column) [as alias] FROM table
+    /^SELECT\s+MIN\([`"]?\w+[`"]?\)(?:\s+as\s+\w+)?\s+FROM\s+[`"]?\w+[`"]?$/is,           // getMinTimestamp: SELECT MIN(column) [as alias] FROM table
+
+    // Schema introspection queries
+    /^DESCRIBE\s+[`"]?\w+[`"]?$/i,                                                         // DESCRIBE table
+    /^SHOW\s+(TABLES|COLUMNS)(?:\s+FROM\s+[`"]?\w+[`"]?)?$/i,                            // SHOW TABLES, SHOW COLUMNS FROM table
+
+    // Information schema queries (cross-database compatibility)
+    /^SELECT\s+.+?\s+FROM\s+information_schema\.\w+/is,                                  // PostgreSQL/MySQL information_schema
+    /^SELECT[\s\S]+?FROM[\s\S]+?information_schema\.\w+/is,                              // Multi-line information_schema queries
+    /^SELECT[\s\S]+?FROM[\s\S]*`[^`]*\.INFORMATION_SCHEMA\.\w+`/is,                      // BigQuery INFORMATION_SCHEMA (backticks)
+
+    // Test connection queries
+    /^SELECT\s+1(?:\s+as\s+\w+)?$/i,                                                     // SELECT 1 [as alias] (connection test)
   ],
   blockedKeywords: [
     'INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE',

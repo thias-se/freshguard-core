@@ -165,9 +165,10 @@ export abstract class BaseConnector implements Connector {
    * Traditional query validation for backward compatibility
    */
   private validateQueryTraditional(sql: string, normalizedSql: string): void {
-    // Check for blocked keywords
+    // Check for blocked keywords (whole word matching to avoid false positives)
     for (const keyword of this.blockedKeywords) {
-      if (normalizedSql.includes(keyword.toUpperCase())) {
+      const keywordRegex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+      if (keywordRegex.test(normalizedSql)) {
         this.logger.warn('Blocked SQL keyword detected', {
           keyword,
           sqlPreview: sql.substring(0, 100)

@@ -11,6 +11,7 @@ import { DuckDBConnector } from '../src/connectors/duckdb.js';
 import { BigQueryConnector } from '../src/connectors/bigquery.js';
 import { SnowflakeConnector } from '../src/connectors/snowflake.js';
 import type { ConnectorConfig } from '../src/types/connector.js';
+import { DEFAULT_SECURITY_CONFIG } from '../src/types/connector.js';
 import { SecurityError } from '../src/errors/index.js';
 
 // Mock configuration for testing - these won't actually connect
@@ -63,14 +64,22 @@ const testSecurityConfig = {
   queryTimeout: 10000,
   maxRows: 1000,
   allowedQueryPatterns: [
-    /^SELECT COUNT\(\*\) FROM/i,
-    /^SELECT MAX\(/i,
-    /^SELECT MIN\(/i,
-    /^DESCRIBE /i,
-    /^SHOW /i,
-    /^SELECT .+ FROM information_schema\./i,
-    // Add specific patterns for multiline information_schema queries
-    /^SELECT .+ FROM information_schema\./is, // 's' flag for multiline
+    // FreshGuard Core monitoring patterns (v0.9.1+) - Updated to handle all whitespace and quoted identifiers
+    /^SELECT\s+COUNT\(\*\)(?:\s+as\s+\w+)?\s+FROM\s+[`"]?\w+[`"]?$/is,                    // getRowCount: SELECT COUNT(*) [as alias] FROM table
+    /^SELECT\s+MAX\([`"]?\w+[`"]?\)(?:\s+as\s+\w+)?\s+FROM\s+[`"]?\w+[`"]?$/is,           // getMaxTimestamp: SELECT MAX(column) [as alias] FROM table
+    /^SELECT\s+MIN\([`"]?\w+[`"]?\)(?:\s+as\s+\w+)?\s+FROM\s+[`"]?\w+[`"]?$/is,           // getMinTimestamp: SELECT MIN(column) [as alias] FROM table
+
+    // Schema introspection queries
+    /^DESCRIBE\s+[`"]?\w+[`"]?$/i,                                                         // DESCRIBE table
+    /^SHOW\s+(TABLES|COLUMNS)(?:\s+FROM\s+[`"]?\w+[`"]?)?$/i,                            // SHOW TABLES, SHOW COLUMNS FROM table
+
+    // Information schema queries (cross-database compatibility)
+    /^SELECT\s+.+?\s+FROM\s+information_schema\.\w+/is,                                  // PostgreSQL/MySQL information_schema
+    /^SELECT[\s\S]+?FROM[\s\S]+?information_schema\.\w+/is,                              // Multi-line information_schema queries
+    /^SELECT[\s\S]+?FROM[\s\S]*`[^`]*\.INFORMATION_SCHEMA\.\w+`/is,                      // BigQuery INFORMATION_SCHEMA (backticks)
+
+    // Test connection queries
+    /^SELECT\s+1(?:\s+as\s+\w+)?$/i,                                                     // SELECT 1 [as alias] (connection test)
   ],
   blockedKeywords: [
     'INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE',
@@ -79,6 +88,124 @@ const testSecurityConfig = {
 };
 
 describe('SQL Query Generation Validation', () => {
+  describe('Security Pattern Validation for Connector Queries (v0.9.1)', () => {
+    it('should allow all connector-generated monitoring queries', () => {
+      // Use the imported security config to test against
+      const patterns = DEFAULT_SECURITY_CONFIG.allowedQueryPatterns;
+
+      // Test queries that our connectors actually generate
+      const legitimateQueries = [
+        // getRowCount queries
+        'SELECT COUNT(*) as count FROM orders',
+        'SELECT COUNT(*) FROM orders',
+        'SELECT COUNT(*) as row_count FROM user_events',
+
+        // getMaxTimestamp queries
+        'SELECT MAX(updated_at) as max_date FROM orders',
+        'SELECT MAX(`order_date`) as max_date FROM orders', // BigQuery backticks
+        'SELECT MAX(created_at) FROM user_events',
+
+        // getMinTimestamp queries
+        'SELECT MIN(created_at) as min_date FROM orders',
+        'SELECT MIN(`timestamp`) as min_date FROM events', // BigQuery backticks
+        'SELECT MIN(date_column) FROM logs',
+
+        // Connection test queries
+        'SELECT 1 as test',
+        'SELECT 1',
+
+        // Schema queries
+        'DESCRIBE orders',
+        'SHOW TABLES',
+        'SHOW COLUMNS FROM users',
+
+        // Information schema queries
+        'SELECT table_name FROM information_schema.tables',
+        'SELECT table_name FROM information_schema.tables WHERE table_schema = $1',
+        'SELECT column_name FROM `project.INFORMATION_SCHEMA.COLUMNS`', // BigQuery
+      ];
+
+      legitimateQueries.forEach((query, index) => {
+        const isAllowed = patterns.some((pattern: RegExp) => pattern.test(query));
+        expect(isAllowed).toBe(true, `Query ${index + 1} should be allowed: ${query}`);
+      });
+    });
+
+    it('should block malicious queries despite updated patterns', () => {
+      const patterns = DEFAULT_SECURITY_CONFIG.allowedQueryPatterns;
+
+      // Test queries that should still be blocked
+      const maliciousQueries = [
+        // SQL injection attempts
+        'SELECT COUNT(*) FROM orders; DROP TABLE users',
+        'SELECT COUNT(*) as count FROM orders UNION SELECT password FROM users',
+        'SELECT MAX(id) as max_id FROM orders WHERE 1=1; DELETE FROM logs',
+
+        // Unauthorized table access
+        'SELECT * FROM users',
+        'SELECT password FROM auth_table',
+        'SELECT COUNT(*) FROM orders WHERE secret_column = "value"',
+
+        // Complex unauthorized queries
+        'SELECT COUNT(*), (SELECT secret FROM admin) as secret FROM orders',
+        'SELECT MAX(id) as max_id FROM (SELECT * FROM sensitive_table) as sub',
+
+        // Wrong patterns
+        'SELECT AVG(amount) FROM orders', // AVG not allowed
+        'SELECT SUM(total) as sum FROM sales', // SUM not allowed
+      ];
+
+      maliciousQueries.forEach((query, index) => {
+        const isAllowed = patterns.some((pattern: RegExp) => pattern.test(query));
+        expect(isAllowed).toBe(false, `Query ${index + 1} should be blocked: ${query}`);
+      });
+    });
+
+    it('should not block legitimate column names containing blocked keywords', () => {
+      const patterns = DEFAULT_SECURITY_CONFIG.allowedQueryPatterns;
+
+      // Test queries with column names that contain blocked keywords as substrings
+      const legitimateColumnNames = [
+        'SELECT COUNT(*) as count FROM orders',
+        'SELECT MAX(updated_at) as max_date FROM orders',           // "updated_at" contains "UPDATE"
+        'SELECT MIN(created_at) as min_date FROM logs',             // "created_at" contains "CREATE"
+        'SELECT MAX(deleted_flag) as max_flag FROM audit_logs',     // "deleted_flag" contains "DELETE"
+        'SELECT COUNT(*) FROM user_inserts_log',                   // table name contains "INSERT"
+      ];
+
+      legitimateColumnNames.forEach((query, index) => {
+        const isAllowed = patterns.some((pattern: RegExp) => pattern.test(query));
+        expect(isAllowed).toBe(true, `Query ${index + 1} with column containing blocked keyword should be allowed: ${query}`);
+      });
+    });
+
+    it('should handle edge cases and variations', () => {
+      const patterns = DEFAULT_SECURITY_CONFIG.allowedQueryPatterns;
+
+      // Test edge cases that should be allowed
+      const edgeCaseQueries = [
+        // Different whitespace patterns
+        'SELECT COUNT(*)  as  count  FROM  orders',
+        'SELECT\nCOUNT(*) as count\nFROM orders',
+        'SELECT\tMAX(date)\tas\tmax_date\tFROM\ttable',
+
+        // Different quote styles
+        'SELECT MAX("quoted_column") as max_date FROM orders',
+        'SELECT MAX(`backtick_column`) as max_date FROM orders',
+        'SELECT COUNT(*) as count FROM `quoted_table`',
+
+        // Case variations
+        'select count(*) as count from orders',
+        'Select Max(updated_at) As max_date From orders',
+      ];
+
+      edgeCaseQueries.forEach((query, index) => {
+        const isAllowed = patterns.some((pattern: RegExp) => pattern.test(query));
+        expect(isAllowed).toBe(true, `Edge case query ${index + 1} should be allowed: ${query}`);
+      });
+    });
+  });
+
   describe('PostgreSQL Connector SQL Generation', () => {
     let connector: PostgresConnector;
 
