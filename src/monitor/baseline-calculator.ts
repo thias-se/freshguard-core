@@ -7,7 +7,7 @@
  * @license MIT
  */
 
-import type { CheckExecution } from '../metadata/types.js';
+import type { MetadataCheckExecution } from '../metadata/types.js';
 import type { ResolvedBaselineConfig } from './baseline-config.js';
 import { MonitoringError } from '../errors/index.js';
 
@@ -53,7 +53,7 @@ export class BaselineCalculator {
    * Calculate baseline from historical check execution data
    */
   calculateBaseline(
-    historicalData: CheckExecution[],
+    historicalData: MetadataCheckExecution[],
     currentRowCount: number
   ): BaselineResult {
     // Convert to data points with timestamp information
@@ -115,7 +115,7 @@ export class BaselineCalculator {
   /**
    * Convert check executions to data points
    */
-  private convertToDataPoints(executions: CheckExecution[]): HistoricalDataPoint[] {
+  private convertToDataPoints(executions: MetadataCheckExecution[]): HistoricalDataPoint[] {
     return executions
       .filter(e => e.rowCount !== undefined && e.executedAt)
       .map(e => ({

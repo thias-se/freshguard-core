@@ -3,7 +3,7 @@
 **Security-hardened, open source data pipeline freshness monitoring engine.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![npm version](https://badge.fury.io/js/@freshguard%2Fcore.svg)](https://www.npmjs.com/package/@thias-se/freshguard-core)
+[![pnpm version](https://img.shields.io/npm/v/@thias-se/freshguard-core.svg)](https://www.npmjs.com/package/@thias-se/freshguard-core)
 [![Security: Hardened](https://img.shields.io/badge/Security-Hardened-green.svg)](docs/SECURITY_FOR_SELF_HOSTERS.md)
 [![Package: Signed](https://img.shields.io/badge/Package-Signed-blue.svg)](https://github.com/sigstore/cosign)
 
@@ -12,6 +12,7 @@
 Monitor when your data pipelines go stale. Get alerts when:
 - **Data hasn't updated in X minutes** (freshness checks)
 - **Row counts deviate unexpectedly** (volume anomaly detection)
+- **Database schemas change unexpectedly** (schema change monitoring)
 
 **Enterprise-grade security** built-in. Supports PostgreSQL, DuckDB, BigQuery, and Snowflake. Self-hosted. Free forever.
 
@@ -111,6 +112,68 @@ if (result.status === 'alert') {
   console.log(`⚠️ Volume anomaly detected: ${result.deviation}% deviation from baseline`);
 }
 ```
+
+### 4. Monitor Schema Changes (Secure)
+
+```typescript
+import { checkSchemaChanges, PostgresConnector } from '@thias-se/freshguard-core';
+
+const schemaRule: MonitoringRule = {
+  id: 'users-schema',
+  sourceId: 'prod_db',
+  name: 'Users Table Schema Monitor',
+  tableName: 'users',
+  ruleType: 'schema_change',
+  checkIntervalMinutes: 60,
+  isActive: true,
+  trackColumnChanges: true,
+  trackTableChanges: true,
+  schemaChangeConfig: {
+    adaptationMode: 'manual',        // 'auto' | 'manual' | 'alert_only'
+    monitoringMode: 'full',          // 'full' | 'partial'
+    trackedColumns: {
+      alertLevel: 'medium',          // 'low' | 'medium' | 'high'
+      trackTypes: true,              // Monitor data type changes
+      trackNullability: false        // Don't track nullability changes
+    },
+    baselineRefreshDays: 30          // Auto-refresh baseline monthly
+  },
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+const result = await checkSchemaChanges(connector, schemaRule, metadataStorage);
+
+if (result.status === 'alert') {
+  console.log(`⚠️ Schema changes detected: ${result.schemaChanges?.summary}`);
+
+  // Check specific changes
+  if (result.schemaChanges?.addedColumns?.length > 0) {
+    console.log('New columns:', result.schemaChanges.addedColumns.map(c => c.columnName));
+  }
+
+  if (result.schemaChanges?.removedColumns?.length > 0) {
+    console.log('Removed columns:', result.schemaChanges.removedColumns.map(c => c.columnName));
+  }
+
+  if (result.schemaChanges?.modifiedColumns?.length > 0) {
+    console.log('Modified columns:', result.schemaChanges.modifiedColumns.map(c =>
+      `${c.columnName} (${c.changeType}): ${c.oldValue} → ${c.newValue}`
+    ));
+  }
+} else {
+  console.log(`✅ Schema is stable (${result.schemaChanges?.changeCount || 0} changes)`);
+}
+```
+
+**Schema Change Adaptation Modes:**
+- **`auto`** - Automatically adapt to safe changes (column additions, safe type changes)
+- **`manual`** - Require manual approval for all changes (default)
+- **`alert_only`** - Always alert, never update baseline automatically
+
+**Monitoring Modes:**
+- **`full`** - Monitor all columns in the table (default)
+- **`partial`** - Monitor only specified columns in `trackedColumns.columns` array
 
 ## 📊 Metadata Storage
 
@@ -224,6 +287,7 @@ try {
 ### 📊 Monitoring
 ✅ **Freshness Monitoring** - Detect stale data based on last update time
 ✅ **Volume Anomaly Detection** - Identify unexpected row count changes
+✅ **Schema Change Monitoring** - Track database schema evolution with configurable adaptation modes
 
 ### 🗄️ Database Support
 ✅ **PostgreSQL** - Production-ready with SSL/TLS support
@@ -370,7 +434,7 @@ if (result.status === 'alert') {
 ### 📅 Scheduled Monitoring
 
 ```typescript
-import { checkFreshness } from '@thias-se/freshguard-core';
+import { checkFreshness, checkVolumeAnomaly, checkSchemaChanges } from '@thias-se/freshguard-core';
 import { PostgresConnector } from '@thias-se/freshguard-core';
 import cron from 'node-cron';
 
@@ -405,6 +469,43 @@ cron.schedule('*/5 * * * *', async () => {
     }
   }
 });
+
+// Monitor schema changes hourly
+cron.schedule('0 * * * *', async () => {
+  try {
+    const schemaRule = {
+      id: 'user-schema-monitor',
+      sourceId: 'prod_db',
+      name: 'User Table Schema Monitor',
+      tableName: 'users',
+      ruleType: 'schema_change',
+      checkIntervalMinutes: 60,
+      isActive: true,
+      schemaChangeConfig: {
+        adaptationMode: 'manual',      // Require manual approval
+        monitoringMode: 'full',        // Monitor all columns
+        trackedColumns: {
+          alertLevel: 'high',          // High-priority alerts
+          trackTypes: true,
+          trackNullability: false
+        }
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const result = await checkSchemaChanges(connector, schemaRule, metadataStorage);
+
+    if (result.status === 'alert') {
+      console.log(`🚨 Schema changes detected in users table: ${result.schemaChanges?.summary}`);
+      // Send critical alert to operations team
+    } else {
+      console.log(`✅ Schema check passed: ${result.schemaChanges?.changeCount || 0} changes`);
+    }
+  } catch (error) {
+    console.error(`❌ Schema monitoring failed: ${error.message}`);
+  }
+});
 ```
 
 ### 🔍 Package Signature Verification
@@ -428,12 +529,15 @@ cosign verify-blob --certificate freshguard-core.tgz.crt --signature freshguard-
 ### Security-First Connectors
 
 ```typescript
-// Import secure connectors and error classes
+// Import secure connectors, monitoring functions, and error classes
 import {
   PostgresConnector,
   DuckDBConnector,
   BigQueryConnector,
   SnowflakeConnector,
+  checkFreshness,
+  checkVolumeAnomaly,
+  checkSchemaChanges,
   SecurityError,
   ConnectionError,
   TimeoutError,
@@ -478,6 +582,24 @@ Check for volume anomalies with statistical safety measures.
 - `rule` - Monitoring rule configuration with validation
 
 **Returns:** `Promise<CheckResult>` with overflow protection
+
+### `checkSchemaChanges(connector, rule)`
+
+Monitor database schema changes with configurable adaptation modes.
+
+**Parameters:**
+- `connector` - Secure database connector
+- `rule` - Monitoring rule with `ruleType: 'schema_change'` and optional `schemaChangeConfig`
+- `metadataStorage` (optional) - Metadata storage for baseline persistence
+
+**Returns:** `Promise<CheckResult>` with `schemaChanges` field containing:
+- `hasChanges` - Boolean indicating if changes were detected
+- `addedColumns` - Array of newly added columns
+- `removedColumns` - Array of removed columns (breaking changes)
+- `modifiedColumns` - Array of type/constraint changes
+- `summary` - Human-readable change summary
+- `changeCount` - Total number of changes
+- `severity` - Change impact level ('low', 'medium', 'high')
 
 ### Database Connectors
 

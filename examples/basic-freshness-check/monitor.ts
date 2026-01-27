@@ -18,6 +18,7 @@ import {
   createDatabase,
   checkFreshness,
   checkVolumeAnomaly,
+  checkSchemaChanges,
   createMetadataStorage,
   type MonitoringRule,
   type CheckResult,
@@ -82,6 +83,29 @@ const MONITORING_RULES: MonitoringRule[] = [
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date(),
+  },
+  {
+    id: 'schema-change-1',
+    sourceId: 'postgres_example',
+    name: 'User Table Schema Monitor',
+    tableName: 'users',
+    ruleType: 'schema_change' as const,
+    checkIntervalMinutes: 60, // Check schema every hour
+    isActive: true,
+    trackColumnChanges: true,
+    trackTableChanges: true,
+    schemaChangeConfig: {
+      adaptationMode: 'auto',        // Auto-adapt to safe changes
+      monitoringMode: 'full',        // Monitor all columns
+      trackedColumns: {
+        alertLevel: 'medium',
+        trackTypes: true,             // Track data type changes
+        trackNullability: false       // Don't track nullability changes
+      },
+      baselineRefreshDays: 30         // Refresh baseline monthly
+    },
+    createdAt: new Date(),
+    updatedAt: new Date(),
   }
 ];
 
@@ -138,6 +162,9 @@ async function main(): Promise<void> {
         } else if (rule.ruleType === 'volume_anomaly') {
           // Use secure volume anomaly detection
           result = await checkVolumeAnomaly(connector, rule, metadataStorage);
+        } else if (rule.ruleType === 'schema_change') {
+          // Use secure schema change monitoring
+          result = await checkSchemaChanges(connector, rule, metadataStorage);
         } else {
           throw new Error(`Unknown rule type: ${rule.ruleType}`);
         }
@@ -297,6 +324,22 @@ function handleAlerts(results: Array<{ rule: MonitoringRule; result: CheckResult
 
     if (rule.ruleType === 'freshness') {
       console.log(`  Data is ${result.lagMinutes} minutes old (tolerance: ${rule.toleranceMinutes}m)`);
+    } else if (rule.ruleType === 'schema_change') {
+      const changes = result.schemaChanges;
+      if (changes?.hasChanges) {
+        console.log(`  Schema changes detected: ${changes.summary}`);
+        console.log(`  Change count: ${changes.changeCount}`);
+        console.log(`  Severity: ${changes.severity}`);
+        if (changes.addedColumns?.length > 0) {
+          console.log(`  Added columns: ${changes.addedColumns.map(c => c.columnName).join(', ')}`);
+        }
+        if (changes.removedColumns?.length > 0) {
+          console.log(`  Removed columns: ${changes.removedColumns.map(c => c.columnName).join(', ')}`);
+        }
+        if (changes.modifiedColumns?.length > 0) {
+          console.log(`  Modified columns: ${changes.modifiedColumns.map(c => `${c.columnName} (${c.changeType})`).join(', ')}`);
+        }
+      }
     }
 
     // Show secure alert destinations

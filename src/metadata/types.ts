@@ -2,19 +2,21 @@
  * Types for metadata storage abstraction
  */
 
-export interface CheckExecution {
+export interface MetadataCheckExecution {
   ruleId: string;
-  status: 'ok' | 'alert' | 'failed';
+  status: 'ok' | 'alert' | 'failed' | 'pending';
   rowCount?: number;
   lagMinutes?: number;
   deviation?: number;
   baselineAverage?: number;
+  currentDeviationPercent?: number;
+  schemaChanges?: unknown;
   executionDurationMs?: number;
   executedAt: Date;
   error?: string;
 }
 
-export interface MonitoringRule {
+export interface MetadataMonitoringRule {
   id: string;
   name: string;
   type: 'freshness' | 'volume' | 'custom';

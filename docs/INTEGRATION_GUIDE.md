@@ -7,8 +7,6 @@ Complete guide for integrating FreshGuard Core's security features into your pro
 ### Installation
 
 ```bash
-npm install @thias-se/freshguard-core
-# or
 pnpm add @thias-se/freshguard-core
 ```
 
@@ -34,6 +32,80 @@ const lastUpdate = await connector.getMaxTimestamp('orders', 'created_at');
 
 console.log(`Orders: ${rowCount} rows, last update: ${lastUpdate}`);
 ```
+
+### Schema Change Monitoring
+
+Monitor database schema changes to detect unexpected modifications:
+
+```typescript
+import { checkSchemaChanges, createMetadataStorage } from '@thias-se/freshguard-core';
+
+// Create metadata storage for baseline persistence
+const metadataStorage = await createMetadataStorage({
+  type: 'duckdb',
+  path: './schema-monitoring.db'
+});
+
+const schemaRule = {
+  id: 'users-schema-monitor',
+  sourceId: 'production',
+  name: 'Users Table Schema Monitor',
+  tableName: 'users',
+  ruleType: 'schema_change' as const,
+  checkIntervalMinutes: 60,
+  isActive: true,
+  trackColumnChanges: true,
+  trackTableChanges: true,
+  schemaChangeConfig: {
+    adaptationMode: 'manual',        // Require manual approval for changes
+    monitoringMode: 'full',          // Monitor all columns
+    trackedColumns: {
+      alertLevel: 'medium',          // Alert level for changes
+      trackTypes: true,              // Track data type changes
+      trackNullability: false        // Ignore nullability changes
+    },
+    baselineRefreshDays: 30          // Refresh baseline monthly
+  },
+  createdAt: new Date(),
+  updatedAt: new Date()
+};
+
+// Check for schema changes
+const result = await checkSchemaChanges(connector, schemaRule, metadataStorage);
+
+if (result.status === 'alert') {
+  console.log('⚠️ Schema changes detected:', result.schemaChanges?.summary);
+
+  // Check specific change types
+  if (result.schemaChanges?.addedColumns?.length > 0) {
+    console.log('New columns:', result.schemaChanges.addedColumns.map(c => c.columnName));
+  }
+
+  if (result.schemaChanges?.removedColumns?.length > 0) {
+    console.log('Removed columns:', result.schemaChanges.removedColumns.map(c => c.columnName));
+  }
+
+  if (result.schemaChanges?.modifiedColumns?.length > 0) {
+    result.schemaChanges.modifiedColumns.forEach(change => {
+      console.log(`Column modified: ${change.columnName} (${change.changeType})`);
+      console.log(`  Old value: ${change.oldValue}`);
+      console.log(`  New value: ${change.newValue}`);
+      console.log(`  Impact: ${change.impact}`);
+    });
+  }
+} else {
+  console.log('✅ Schema is stable');
+}
+
+// Clean up
+await metadataStorage.close();
+```
+
+#### Schema Change Adaptation Modes
+
+- **`auto`** - Automatically adapt to safe changes (column additions, safe type expansions)
+- **`manual`** - Require manual approval for all changes (recommended for production)
+- **`alert_only`** - Always alert but never update baseline automatically
 
 ## Security Configuration
 
@@ -372,14 +444,14 @@ RUN addgroup -g 1001 -S freshguard && adduser -S -u 1001 freshguard -G freshguar
 USER freshguard
 
 # Application setup
-COPY package*.json ./
-RUN npm ci --only=production
+COPY package*.json pnpm-lock.yaml ./
+RUN corepack enable pnpm && pnpm install --frozen-lockfile --prod
 
 COPY . .
 
 # Security: Drop privileges and run read-only
 EXPOSE 3000
-CMD ["npm", "start"]
+CMD ["pnpm", "start"]
 ```
 
 ### Kubernetes Deployment

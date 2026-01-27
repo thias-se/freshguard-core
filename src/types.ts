@@ -85,6 +85,19 @@ export interface MonitoringRule {
   trackColumnChanges?: boolean;
   trackTableChanges?: boolean;
 
+  // Enhanced schema change configuration
+  schemaChangeConfig?: {
+    adaptationMode?: 'auto' | 'manual' | 'alert_only';  // Default: 'manual'
+    monitoringMode?: 'full' | 'partial';                // Default: 'full'
+    trackedColumns?: {
+      columns?: string[];           // Column names to monitor (partial mode)
+      alertLevel?: 'low' | 'medium' | 'high';  // Default: 'medium'
+      trackTypes?: boolean;         // Track data type changes (default: true)
+      trackNullability?: boolean;   // Track NOT NULL changes (default: false)
+    };
+    baselineRefreshDays?: number;   // Auto-refresh baseline after N days (default: 30)
+  };
+
   // Custom SQL settings
   customSql?: string;
   expectedResult?: unknown;
@@ -154,6 +167,7 @@ export interface CheckResult {
   lagMinutes?: number;
   deviation?: number;
   baselineAverage?: number;
+  schemaChanges?: SchemaChanges;
   error?: string;
   queryExecuted?: string;
   executionDurationMs?: number;
@@ -184,6 +198,45 @@ export interface CheckExecution {
   schemaChanges?: unknown;
   executedAt: Date;
   nextCheckAt?: Date;
+}
+
+// ==============================================
+// Schema Change Monitoring Types
+// ==============================================
+
+/**
+ * Column change detected in schema monitoring
+ */
+export interface ColumnChange {
+  columnName: string;
+  changeType: 'added' | 'removed' | 'type_changed' | 'nullability_changed';
+  oldValue?: string;
+  newValue?: string;
+  impact: 'safe' | 'warning' | 'breaking';
+}
+
+/**
+ * Schema changes result from monitoring
+ */
+export interface SchemaChanges {
+  hasChanges: boolean;
+  addedColumns: ColumnChange[];
+  removedColumns: ColumnChange[];
+  modifiedColumns: ColumnChange[];
+  summary: string;
+  changeCount: number;
+  severity: 'low' | 'medium' | 'high';
+}
+
+/**
+ * Schema baseline for comparison
+ */
+export interface SchemaBaseline {
+  ruleId: string;
+  tableName: string;
+  schema: import('./types/connector.js').TableSchema;
+  capturedAt: Date;
+  schemaHash: string;
 }
 
 /**

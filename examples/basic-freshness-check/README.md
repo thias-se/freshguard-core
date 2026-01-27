@@ -8,6 +8,7 @@ This example demonstrates **FreshGuard Core v0.2.0** with **Phase 2 Security Imp
 ✅ **PostgreSQL Integration** - Secure connector with built-in security validation
 ✅ **Freshness Monitoring** - Detect when data becomes stale with automatic query analysis
 ✅ **Volume Anomaly Detection** - Identify unexpected changes in data volume
+✅ **Schema Change Monitoring** - Track database schema evolution with configurable adaptation modes
 ✅ **Security Observability** - Structured logging, metrics, and audit trails
 ✅ **Production Resilience** - Circuit breakers, timeouts, and error sanitization
 ✅ **Alert Handling** - Secure notification channels with data sanitization
@@ -16,7 +17,7 @@ This example demonstrates **FreshGuard Core v0.2.0** with **Phase 2 Security Imp
 
 - **Node.js20+** (Check with `node --version`)
 - **Docker & Docker Compose** (for PostgreSQL database)
-- **pnpm** (recommended) or npm
+- **pnpm** (package manager)
 
 ## Quick Start (5 minutes)
 
@@ -28,7 +29,6 @@ cd examples/basic-freshness-check
 
 # Install dependencies
 pnpm install
-# or: npm install
 ```
 
 ### 2. Configure Environment

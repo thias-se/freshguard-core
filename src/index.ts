@@ -9,7 +9,7 @@
  */
 
 // Export monitoring functions
-export { checkFreshness, checkVolumeAnomaly } from './monitor/index.js';
+export { checkFreshness, checkVolumeAnomaly, checkSchemaChanges } from './monitor/index.js';
 
 // Export connectors
 export { PostgresConnector, DuckDBConnector, BigQueryConnector, SnowflakeConnector } from './connectors/index.js';
@@ -48,4 +48,7 @@ export type {
   CheckStatus,
   AlertDestinationType,
   FreshGuardConfig,
+  SchemaChanges,
+  ColumnChange,
+  SchemaBaseline,
 } from './types.js';

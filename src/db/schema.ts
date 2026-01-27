@@ -227,6 +227,21 @@ export const systemConfig = pgTable('system_config', {
 });
 
 // ==============================================
+// Schema Change Monitoring
+// ==============================================
+
+export const schemaBaselines = pgTable('schema_baselines', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  ruleId: uuid('rule_id').references(() => monitoringRules.id, { onDelete: 'cascade' }).notNull(),
+  tableName: varchar('table_name', { length: 256 }).notNull(),
+  schemaSnapshot: jsonb('schema_snapshot').notNull(),
+  schemaHash: varchar('schema_hash', { length: 64 }).notNull(),
+  capturedAt: timestamp('captured_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  adaptationReason: text('adaptation_reason'),
+});
+
+// ==============================================
 // Schema Migrations
 // ==============================================
 
@@ -253,6 +268,14 @@ export const monitoringRulesRelations = relations(monitoringRules, ({ one, many 
   alertDestinations: many(alertDestinations),
   checkExecutions: many(checkExecutions),
   alertLogs: many(alertLog),
+  schemaBaselines: many(schemaBaselines),
+}));
+
+export const schemaBaselinesRelations = relations(schemaBaselines, ({ one }) => ({
+  rule: one(monitoringRules, {
+    fields: [schemaBaselines.ruleId],
+    references: [monitoringRules.id],
+  }),
 }));
 
 export const checkExecutionsRelations = relations(checkExecutions, ({ one, many }) => ({

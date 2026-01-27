@@ -1,6 +1,6 @@
 # Metadata Storage Configuration
 
-FreshGuard Core uses metadata storage to track execution history, which enables volume anomaly detection and monitoring analytics. You can choose between **DuckDB** (embedded, zero-setup) or **PostgreSQL** (production-ready) storage.
+FreshGuard Core uses metadata storage to track execution history and schema baselines, which enables volume anomaly detection, schema change monitoring, and monitoring analytics. You can choose between **DuckDB** (embedded, zero-setup) or **PostgreSQL** (production-ready) storage.
 
 ## Quick Start (Zero Setup)
 
@@ -87,7 +87,7 @@ GRANT ALL PRIVILEGES ON DATABASE freshguard_metadata TO freshguard_user;
 2. **Run migrations**:
 ```bash
 # Using the FreshGuard schema
-npx drizzle-kit push:pg --config=drizzle.config.ts
+pnpm exec drizzle-kit push:pg --config=drizzle.config.ts
 ```
 
 3. **Configure connection**:
@@ -181,7 +181,8 @@ import {
   PostgresConnector,
   createMetadataStorage,
   checkFreshness,
-  checkVolumeAnomaly
+  checkVolumeAnomaly,
+  checkSchemaChanges
 } from '@thias-se/freshguard-core';
 
 // Setup
@@ -210,6 +211,33 @@ const rule = {
 // Run checks (metadata is automatically tracked)
 const freshnessResult = await checkFreshness(connector, rule, metadataStorage);
 const volumeResult = await checkVolumeAnomaly(connector, rule, metadataStorage);
+
+// Schema change monitoring rule
+const schemaRule = {
+  id: 'orders-schema',
+  sourceId: 'main-db',
+  name: 'Orders Table Schema Monitor',
+  tableName: 'orders',
+  ruleType: 'schema_change' as const,
+  checkIntervalMinutes: 60,
+  isActive: true,
+  trackColumnChanges: true,
+  trackTableChanges: true,
+  schemaChangeConfig: {
+    adaptationMode: 'manual',
+    monitoringMode: 'full',
+    trackedColumns: {
+      alertLevel: 'medium',
+      trackTypes: true,
+      trackNullability: false
+    }
+  },
+  createdAt: new Date(),
+  updatedAt: new Date()
+};
+
+// Check for schema changes (baseline automatically stored)
+const schemaResult = await checkSchemaChanges(connector, schemaRule, metadataStorage);
 
 // Clean up
 await metadataStorage.close();
@@ -245,6 +273,8 @@ async function runMonitoringCheck(rule: MonitoringRule) {
       return await checkFreshness(connector, rule, metadataStorage);
     } else if (rule.ruleType === 'volume_anomaly') {
       return await checkVolumeAnomaly(connector, rule, metadataStorage);
+    } else if (rule.ruleType === 'schema_change') {
+      return await checkSchemaChanges(connector, rule, metadataStorage);
     }
   } catch (error) {
     console.error(`Monitoring failed for rule ${rule.id}:`, error);
@@ -297,14 +327,28 @@ CREATE TABLE monitoring_rules (
   updated_at TIMESTAMP NOT NULL
 );
 
+CREATE TABLE schema_baselines (
+  rule_id TEXT PRIMARY KEY,
+  table_name TEXT NOT NULL,
+  schema_snapshot TEXT NOT NULL, -- JSON as text
+  schema_hash TEXT NOT NULL,
+  captured_at TIMESTAMP NOT NULL,
+  updated_at TIMESTAMP NOT NULL,
+  adaptation_reason TEXT
+);
+
 CREATE INDEX idx_executions_rule_time
 ON check_executions(rule_id, executed_at);
+
+CREATE INDEX idx_schema_baselines_table_name
+ON schema_baselines(table_name);
 ```
 
 ### PostgreSQL Schema
 Uses the existing FreshGuard Drizzle schema with tables:
 - `checkExecutions` - Execution history
 - `monitoringRules` - Rule definitions
+- `schemaBaselines` - Schema change baselines for comparison
 
 ## Troubleshooting
 
@@ -348,10 +392,10 @@ const storage = await createMetadataStorage({
 **Migration issues**:
 ```bash
 # Verify schema exists
-npx drizzle-kit introspect:pg --config=drizzle.config.ts
+pnpm exec drizzle-kit introspect:pg --config=drizzle.config.ts
 
 # Apply missing migrations
-npx drizzle-kit push:pg --config=drizzle.config.ts
+pnpm exec drizzle-kit push:pg --config=drizzle.config.ts
 ```
 
 **Permission issues**:
@@ -359,6 +403,7 @@ npx drizzle-kit push:pg --config=drizzle.config.ts
 -- Grant required permissions
 GRANT SELECT, INSERT, UPDATE ON check_executions TO freshguard_user;
 GRANT SELECT, INSERT, UPDATE ON monitoring_rules TO freshguard_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON schema_baselines TO freshguard_user;
 ```
 
 ## Best Practices

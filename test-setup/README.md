@@ -136,7 +136,7 @@ PostgreSQL tests run automatically with service containers. DuckDB may skip if n
 ```bash
 # Run integration tests in Docker
 docker run --rm -v $(pwd):/app -w /app node:20 \
-  bash -c "npm install && npm run test:db:setup:all && npm run test:integration:improved"
+  bash -c "corepack enable pnpm && pnpm install && pnpm test:db:setup:all && pnpm test:integration:improved"
 ```
 
 ## File Structure
@@ -215,11 +215,11 @@ services:
 steps:
   - name: Setup databases
     run: |
-      npm run test:db:setup
+      pnpm test:db:setup
 
   - name: Run integration tests
     run: |
-      npm run test:integration:improved
+      pnpm test:integration:improved
 ```
 
 ## Maintenance

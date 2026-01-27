@@ -5,7 +5,7 @@ Complete guide for self-hosting FreshGuard Core with enterprise-grade security a
 ## What You Get (Free, Self-Hosted)
 
 ✅ **Enterprise Security** - Query complexity analysis, SQL injection protection, circuit breakers
-✅ **Core Monitoring Engine** - Freshness + Volume anomaly detection
+✅ **Core Monitoring Engine** - Freshness + Volume anomaly detection + Schema change monitoring
 ✅ **Multi-Database Support** - PostgreSQL, BigQuery, Snowflake, DuckDB connectors
 ✅ **Production Observability** - Structured logging, metrics, performance monitoring
 ✅ **Custom Alerting** - Slack/Email/PagerDuty integration via APIs
@@ -24,8 +24,6 @@ Complete guide for self-hosting FreshGuard Core with enterprise-grade security a
 ### Installation
 
 ```bash
-npm install @thias-se/freshguard-core
-# or
 pnpm add @thias-se/freshguard-core
 ```
 
@@ -167,8 +165,8 @@ RUN addgroup -g 1001 -S freshguard && adduser -S -u 1001 freshguard -G freshguar
 
 # Application setup
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production --omit=dev
+COPY package*.json pnpm-lock.yaml ./
+RUN corepack enable pnpm && pnpm install --frozen-lockfile --prod
 
 # Copy application code
 COPY . .
@@ -182,7 +180,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:3000/health || exit 1
 
 EXPOSE 3000
-CMD ["npm", "start"]
+CMD ["pnpm", "start"]
 ```
 
 ### Kubernetes Deployment
@@ -446,7 +444,8 @@ import {
   PostgresConnector,
   MonitoringRule,
   checkFreshness,
-  checkVolumeAnomaly
+  checkVolumeAnomaly,
+  checkSchemaChanges
 } from '@thias-se/freshguard-core';
 import cron from 'node-cron';
 
@@ -482,6 +481,26 @@ const rules: MonitoringRule[] = [
       type: 'pagerduty',
       integrationKey: process.env.PAGERDUTY_KEY!
     }]
+  },
+  {
+    id: 'users-schema',
+    type: 'schema_change',
+    table: 'users',
+    frequency: 3600,                    // Check hourly
+    schemaChangeConfig: {
+      adaptationMode: 'manual',         // Require manual approval
+      monitoringMode: 'full',           // Monitor all columns
+      trackedColumns: {
+        alertLevel: 'high',             // High-priority alerts for schema changes
+        trackTypes: true,               // Track data type changes
+        trackNullability: false         // Don't track nullability changes
+      }
+    },
+    alerts: [{
+      type: 'slack',
+      webhook: process.env.SLACK_WEBHOOK_URL!,
+      severity: 'critical'              // Schema changes are critical
+    }]
   }
 ];
 
@@ -495,6 +514,8 @@ async function runMonitoring() {
         result = await checkFreshness(connector, rule);
       } else if (rule.type === 'volume_anomaly') {
         result = await checkVolumeAnomaly(connector, rule);
+      } else if (rule.type === 'schema_change') {
+        result = await checkSchemaChanges(connector, rule);
       }
 
       // Handle alerts

@@ -109,7 +109,7 @@ export async function checkVolumeAnomaly(
     }
 
     // Get historical data with graceful fallback
-    let historicalExecutions: import('../metadata/types.js').CheckExecution[] = [];
+    let historicalExecutions: import('../metadata/types.js').MetadataCheckExecution[] = [];
     if (metadataStorage) {
       try {
         historicalExecutions = await executeWithTimeout(

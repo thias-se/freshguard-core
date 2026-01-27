@@ -881,7 +881,7 @@ git reset --hard origin/main
 sha256sum -c freshguard.sha256
 
 # Update dependencies
-npm ci --production
+pnpm install --prod --frozen-lockfile
 
 # Review and update configuration
 nano /etc/freshguard/.env
@@ -1086,7 +1086,7 @@ sudo cryptsetup status /dev/mapper/freshguard-data
 apt update && apt list --upgradable
 
 # Check for CVEs in dependencies
-npm audit
+pnpm audit
 
 # Review authentication logs
 journalctl -u freshguard --since "1 week ago" | grep -i auth
@@ -1142,7 +1142,7 @@ nikto -h localhost
 # CVE monitoring script
 
 # Check Node.js vulnerabilities
-npm audit --audit-level high
+pnpm audit --audit-level high
 
 # Check system package vulnerabilities
 apt list --upgradable | grep -i security
@@ -1157,7 +1157,7 @@ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
   echo "=========================================="
   echo ""
   echo "Node.js Dependencies:"
-  npm audit --json | jq '.vulnerabilities'
+  pnpm audit --json | jq '.vulnerabilities'
   echo ""
   echo "System Packages:"
   apt list --upgradable
