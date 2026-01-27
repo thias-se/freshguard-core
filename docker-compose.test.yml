@@ -18,21 +18,41 @@ services:
     tmpfs:
       - /var/lib/postgresql/data  # In-memory for faster tests
 
-  # Future: Add other databases as you expand connectors
-  # mysql_test:
-  #   image: mysql:8.0
-  #   environment:
-  #     MYSQL_ROOT_PASSWORD: test
-  #     MYSQL_DATABASE: freshguard_test
-  #     MYSQL_USER: test
-  #     MYSQL_PASSWORD: test
-  #   ports:
-  #     - "3307:3306"
-  #   healthcheck:
-  #     test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 5
+  # MySQL test database for MySQL connector
+  mysql_test:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: test
+      MYSQL_DATABASE: freshguard_test
+      MYSQL_USER: test
+      MYSQL_PASSWORD: test
+    ports:
+      - "3307:3306"
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ./test-setup/init-mysql.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+
+  # PostgreSQL test database (doubles as Redshift simulator)
+  redshift_test:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: freshguard_test
+    ports:
+      - "5435:5432"  # Different port from main postgres
+    volumes:
+      - ./test-setup/init-redshift.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d freshguard_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   # redis_test:
   #   image: redis:7-alpine

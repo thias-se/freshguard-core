@@ -171,6 +171,14 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
     /^SELECT[\s\S]+?FROM[\s\S]+?information_schema\.\w+/is,                              // Multi-line information_schema queries
     /^SELECT[\s\S]+?FROM[\s\S]*`[^`]*\.INFORMATION_SCHEMA\.\w+`/is,                      // BigQuery INFORMATION_SCHEMA (backticks)
 
+    // MySQL-specific patterns with backticks
+    /^SELECT\s+table_name\s+FROM\s+information_schema\.tables\s+WHERE\s+table_schema\s*=\s*\?/is, // MySQL table listing
+    /^SELECT\s+column_name,\s*data_type,\s*is_nullable\s+FROM\s+information_schema\.columns/is,   // MySQL schema query
+
+    // Redshift-specific patterns (PostgreSQL compatibility)
+    /^SELECT\s+tablename\s+FROM\s+pg_tables/is,                                          // Redshift table listing using pg_tables
+    /^SELECT\s+[\s\S]*?FROM\s+svv_table_info/is,                                         // Redshift system view queries
+
     // Test connection queries
     /^SELECT\s+1(?:\s+as\s+\w+)?$/i,                                                     // SELECT 1 [as alias] (connection test)
   ],
@@ -187,7 +195,7 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
 /**
  * Database connector types supported by FreshGuard Core
  */
-export type ConnectorType = 'postgres' | 'duckdb' | 'bigquery' | 'snowflake';
+export type ConnectorType = 'postgres' | 'duckdb' | 'bigquery' | 'snowflake' | 'mysql' | 'redshift';
 
 /**
  * Connector factory configuration

@@ -24,6 +24,30 @@ describe('Package Exports', () => {
     expect(typeof PostgresConnector).toBe('function');
   });
 
+  it('should export MySQLConnector class', async () => {
+    const { MySQLConnector } = await import('../src/connectors/mysql.js');
+    expect(MySQLConnector).toBeDefined();
+    expect(typeof MySQLConnector).toBe('function');
+  });
+
+  it('should export RedshiftConnector class', async () => {
+    const { RedshiftConnector } = await import('../src/connectors/redshift.js');
+    expect(RedshiftConnector).toBeDefined();
+    expect(typeof RedshiftConnector).toBe('function');
+  });
+
+  it('should export BigQueryConnector class', async () => {
+    const { BigQueryConnector } = await import('../src/connectors/bigquery.js');
+    expect(BigQueryConnector).toBeDefined();
+    expect(typeof BigQueryConnector).toBe('function');
+  });
+
+  it('should export SnowflakeConnector class', async () => {
+    const { SnowflakeConnector } = await import('../src/connectors/snowflake.js');
+    expect(SnowflakeConnector).toBeDefined();
+    expect(typeof SnowflakeConnector).toBe('function');
+  });
+
   // Skip DuckDB test until native bindings are properly compiled
   it.skip('should export DuckDBConnector class', async () => {
     // Skipped: DuckDB native bindings not available

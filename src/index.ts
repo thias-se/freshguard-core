@@ -12,7 +12,7 @@
 export { checkFreshness, checkVolumeAnomaly, checkSchemaChanges } from './monitor/index.js';
 
 // Export connectors
-export { PostgresConnector, DuckDBConnector, BigQueryConnector, SnowflakeConnector } from './connectors/index.js';
+export { PostgresConnector, DuckDBConnector, BigQueryConnector, SnowflakeConnector, MySQLConnector, RedshiftConnector } from './connectors/index.js';
 
 // Export database utilities
 export { createDatabase, schema } from './db/index.js';

@@ -8,6 +8,8 @@ import { PostgresConnector } from '../src/connectors/postgres.js';
 import { DuckDBConnector } from '../src/connectors/duckdb.js';
 import { BigQueryConnector } from '../src/connectors/bigquery.js';
 import { SnowflakeConnector } from '../src/connectors/snowflake.js';
+import { MySQLConnector } from '../src/connectors/mysql.js';
+import { RedshiftConnector } from '../src/connectors/redshift.js';
 import type { ConnectorConfig } from '../src/types/connector.js';
 import { SecurityError } from '../src/errors/index.js';
 
@@ -52,6 +54,24 @@ const validSnowflakeConfig: ConnectorConfig = {
   host: 'test-account.snowflakecomputing.com',
   port: 443,
   database: 'TEST_DB',
+  username: 'test_user',
+  password: 'test_password',
+  ssl: true,
+};
+
+const validMySQLConfig: ConnectorConfig = {
+  host: 'localhost',
+  port: 3306,
+  database: 'test_db',
+  username: 'test_user',
+  password: 'test_password',
+  ssl: true,
+};
+
+const validRedshiftConfig: ConnectorConfig = {
+  host: 'test-cluster.redshift.amazonaws.com',
+  port: 5439,
+  database: 'test_db',
   username: 'test_user',
   password: 'test_password',
   ssl: true,
@@ -261,14 +281,156 @@ describe('SnowflakeConnector Security', () => {
   });
 });
 
+describe('MySQLConnector Security', () => {
+  it('should instantiate with valid configuration', () => {
+    expect(() => new MySQLConnector(validMySQLConfig)).not.toThrow();
+  });
+
+  it('should reject invalid configuration', () => {
+    expect(() => new MySQLConnector({} as ConnectorConfig)).toThrow();
+    expect(() => new MySQLConnector({
+      host: '',
+      port: 3306,
+      database: 'test',
+      username: 'user',
+      password: 'pass',
+    })).toThrow('Host is required');
+  });
+
+  it('should have secure connector interface methods', () => {
+    const connector = new MySQLConnector(validMySQLConfig);
+
+    // New secure methods
+    expect(connector.testConnection).toBeDefined();
+    expect(connector.listTables).toBeDefined();
+    expect(connector.getTableSchema).toBeDefined();
+    expect(connector.getRowCount).toBeDefined();
+    expect(connector.getMaxTimestamp).toBeDefined();
+    expect(connector.getMinTimestamp).toBeDefined();
+    expect(connector.getLastModified).toBeDefined();
+    expect(connector.close).toBeDefined();
+
+    // Legacy methods (deprecated but present)
+    expect(connector.connectLegacy).toBeDefined();
+    expect(connector.testConnectionLegacy).toBeDefined();
+    expect(connector.getTableMetadata).toBeDefined();
+  });
+
+  it('should block direct SQL queries for security', async () => {
+    const connector = new MySQLConnector(validMySQLConfig);
+    await expect(connector.query('SELECT * FROM users')).rejects.toThrow(
+      'Direct SQL queries are not allowed for security reasons'
+    );
+  });
+
+  it('should validate host parameter', () => {
+    expect(() => new MySQLConnector({
+      ...validMySQLConfig,
+      host: '',
+    })).toThrow('Host is required');
+  });
+
+  it('should validate port parameter', () => {
+    expect(() => new MySQLConnector({
+      ...validMySQLConfig,
+      port: 99999,
+    })).toThrow('Port must be between 1 and 65535');
+  });
+
+  it('should require SSL by default', () => {
+    expect(() => new MySQLConnector({
+      ...validMySQLConfig,
+      ssl: false,
+    })).toThrow(SecurityError);
+  });
+
+  it('should use MySQL default port when not specified', () => {
+    const config = { ...validMySQLConfig };
+    delete config.port;
+    expect(() => new MySQLConnector(config)).not.toThrow();
+  });
+});
+
+describe('RedshiftConnector Security', () => {
+  it('should instantiate with valid configuration', () => {
+    expect(() => new RedshiftConnector(validRedshiftConfig)).not.toThrow();
+  });
+
+  it('should reject invalid configuration', () => {
+    expect(() => new RedshiftConnector({} as ConnectorConfig)).toThrow();
+    expect(() => new RedshiftConnector({
+      host: '',
+      port: 5439,
+      database: 'test',
+      username: 'user',
+      password: 'pass',
+    })).toThrow('Host is required');
+  });
+
+  it('should have secure connector interface methods', () => {
+    const connector = new RedshiftConnector(validRedshiftConfig);
+
+    // New secure methods
+    expect(connector.testConnection).toBeDefined();
+    expect(connector.listTables).toBeDefined();
+    expect(connector.getTableSchema).toBeDefined();
+    expect(connector.getRowCount).toBeDefined();
+    expect(connector.getMaxTimestamp).toBeDefined();
+    expect(connector.getMinTimestamp).toBeDefined();
+    expect(connector.getLastModified).toBeDefined();
+    expect(connector.close).toBeDefined();
+
+    // Legacy methods (deprecated but present)
+    expect(connector.connectLegacy).toBeDefined();
+    expect(connector.testConnectionLegacy).toBeDefined();
+    expect(connector.getTableMetadata).toBeDefined();
+  });
+
+  it('should block direct SQL queries for security', async () => {
+    const connector = new RedshiftConnector(validRedshiftConfig);
+    await expect(connector.query('SELECT * FROM users')).rejects.toThrow(
+      'Direct SQL queries are not allowed for security reasons'
+    );
+  });
+
+  it('should validate host parameter', () => {
+    expect(() => new RedshiftConnector({
+      ...validRedshiftConfig,
+      host: '',
+    })).toThrow('Host is required');
+  });
+
+  it('should validate port parameter', () => {
+    expect(() => new RedshiftConnector({
+      ...validRedshiftConfig,
+      port: 99999,
+    })).toThrow('Port must be between 1 and 65535');
+  });
+
+  it('should require SSL by default', () => {
+    expect(() => new RedshiftConnector({
+      ...validRedshiftConfig,
+      ssl: false,
+    })).toThrow(SecurityError);
+  });
+
+  it('should use Redshift default port when not specified', () => {
+    const config = { ...validRedshiftConfig };
+    delete config.port;
+    expect(() => new RedshiftConnector(config)).not.toThrow();
+  });
+});
+
 describe('Connector Security Consistency', () => {
   it('should all extend BaseConnector with security features', () => {
     const postgres = new PostgresConnector(validPostgresConfig);
     const duckdb = new DuckDBConnector(validDuckDBConfig);
     const bigquery = new BigQueryConnector(validBigQueryConfig);
     const snowflake = new SnowflakeConnector(validSnowflakeConfig);
+    const mysql = new MySQLConnector(validMySQLConfig);
+    const redshift = new RedshiftConnector(validRedshiftConfig);
 
-    const connectors = [postgres, duckdb, bigquery, snowflake];
+    const connectors = [postgres, duckdb, bigquery, snowflake, mysql, redshift];
 
     // All should have core security methods
     for (const connector of connectors) {
@@ -287,8 +449,10 @@ describe('Connector Security Consistency', () => {
     const duckdb = new DuckDBConnector(validDuckDBConfig);
     const bigquery = new BigQueryConnector(validBigQueryConfig);
     const snowflake = new SnowflakeConnector(validSnowflakeConfig);
+    const mysql = new MySQLConnector(validMySQLConfig);
+    const redshift = new RedshiftConnector(validRedshiftConfig);
 
-    const connectors = [postgres, duckdb, bigquery, snowflake];
+    const connectors = [postgres, duckdb, bigquery, snowflake, mysql, redshift];
 
     for (const connector of connectors) {
       await expect(connector.query('SELECT 1')).rejects.toThrow(
@@ -302,8 +466,10 @@ describe('Connector Security Consistency', () => {
     const duckdb = new DuckDBConnector(validDuckDBConfig);
     const bigquery = new BigQueryConnector(validBigQueryConfig);
     const snowflake = new SnowflakeConnector(validSnowflakeConfig);
+    const mysql = new MySQLConnector(validMySQLConfig);
+    const redshift = new RedshiftConnector(validRedshiftConfig);
 
-    const connectors = [postgres, duckdb, bigquery, snowflake];
+    const connectors = [postgres, duckdb, bigquery, snowflake, mysql, redshift];
 
     // All should have deprecated legacy methods
     for (const connector of connectors) {
