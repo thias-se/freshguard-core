@@ -1,16 +1,16 @@
 # Self-Hosting FreshGuard Core
 
-Complete guide for self-hosting FreshGuard Core with high-grade security and monitoring.
+Guide for self-hosting FreshGuard Core in your own environment.
 
 ## What You Get (Free, Self-Hosted)
 
-✅ **Security** - Query complexity analysis, SQL injection protection, circuit breakers
-✅ **Core Monitoring Engine** - Freshness + Volume anomaly detection + Schema change monitoring
-✅ **Multi-Database Support** - PostgreSQL, BigQuery, Snowflake, DuckDB connectors
-✅ **Production Observability** - Structured logging, metrics, performance monitoring
-✅ **Custom Alerting** - Slack/Email/PagerDuty integration via APIs
+✅ **Basic Security** - Input validation, SQL injection protection, secure connections
+✅ **Core Monitoring** - Freshness, volume anomaly detection, and schema change monitoring
+✅ **Multi-Database Support** - PostgreSQL, BigQuery, Snowflake, DuckDB, MySQL, Redshift
+✅ **Structured Logging** - JSON logging with error sanitization
+✅ **Custom Integration** - Build your own alerting with the API
 ✅ **Full Control** - Your data stays on your infrastructure
-✅ **Docker & Kubernetes Ready** - Production-ready deployment examples
+✅ **CLI Tool** - Command-line interface for basic operations
 
 ## What's Not Included (Cloud-Only)
 
@@ -29,83 +29,74 @@ pnpm add @thias-se/freshguard-core
 ### Basic Setup
 
 ```typescript
-import { PostgresConnector } from '@thias-se/freshguard-core';
+import { PostgresConnector, checkFreshness } from '@thias-se/freshguard-core';
+import type { MonitoringRule } from '@thias-se/freshguard-core';
 
-// Production-ready configuration with security features
+// Basic configuration
 const connector = new PostgresConnector({
   host: process.env.DB_HOST!,
-  port: parseInt(process.env.DB_PORT!),
+  port: parseInt(process.env.DB_PORT!) || 5432,
   database: process.env.DB_NAME!,
-  username: process.env.DB_USER!,           // Use read-only user
-  password: process.env.DB_PASSWORD!,       // From secure vault
-  ssl: true,                                // Always require SSL
-  timeout: 30000,
-  queryTimeout: 10000
-}, {
-  // Security configuration
-  enableQueryAnalysis: true,                // Enable complexity analysis
-  maxQueryRiskScore: 70,                   // Block high-risk queries
-  maxQueryComplexityScore: 80,             // Limit query complexity
-  enableDetailedLogging: false,            // Reduce log volume in prod
-  requireSSL: true                         // Enforce SSL connections
+  username: process.env.DB_USER!,     // Use read-only user
+  password: process.env.DB_PASSWORD!, // From environment variables
+  ssl: true,                          // Enable SSL
 });
 
-// Check data freshness with automatic security protection
-const rowCount = await connector.getRowCount('orders');
-const lastUpdate = await connector.getMaxTimestamp('orders', 'created_at');
-
-console.log(`Orders: ${rowCount} rows, last update: ${lastUpdate}`);
-```
-
-## Security Configuration
-
-FreshGuard Core includes security features that must be properly configured.
-
-### Production Security Setup
-
-```typescript
-import { PostgresConnector, SecurityConfig } from '@thias-se/freshguard-core';
-
-const prodSecurityConfig: Partial<SecurityConfig> = {
-  // Query Security Analysis
-  enableQueryAnalysis: true,              // Always enable in production
-  maxQueryRiskScore: 70,                 // Block high-risk queries (0-100)
-  maxQueryComplexityScore: 80,           // Block overly complex queries
-
-  // Connection Security
-  requireSSL: true,                      // Enforce SSL connections
-  connectionTimeout: 30000,              // 30 second connection timeout
-  queryTimeout: 10000,                   // 10 second query timeout
-  maxRows: 1000,                        // Limit result set size
-
-  // Query Pattern Security
-  allowedQueryPatterns: [                // Override defaults if needed
-    /^SELECT COUNT\(\*\) FROM/i,
-    /^SELECT MAX\(/i,
-    /^SELECT MIN\(/i
-  ],
-  blockedKeywords: [                     // Additional blocked keywords
-    'INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'CREATE'
-  ],
-
-  // Logging and Monitoring
-  enableDetailedLogging: false           // Reduce log volume in production
+// Define monitoring rule
+const rule: MonitoringRule = {
+  id: 'orders-freshness',
+  sourceId: 'main_db',
+  name: 'Orders Freshness Check',
+  tableName: 'orders',
+  ruleType: 'freshness',
+  toleranceMinutes: 60,
+  timestampColumn: 'created_at',
+  checkIntervalMinutes: 5,
+  isActive: true,
+  createdAt: new Date(),
+  updatedAt: new Date(),
 };
 
-const connector = new PostgresConnector(dbConfig, prodSecurityConfig);
+// Check freshness
+const result = await checkFreshness(connector, rule);
+console.log(`Status: ${result.status}, Lag: ${result.lagMinutes}m`);
 ```
 
-### Development Configuration
+## Security Best Practices
+
+FreshGuard Core includes basic security features that are enabled by default.
+
+### Connection Security
 
 ```typescript
-const devSecurityConfig: Partial<SecurityConfig> = {
-  // More permissive for development
-  enableQueryAnalysis: true,
-  maxQueryRiskScore: 90,                 // Allow riskier queries for testing
-  maxQueryComplexityScore: 100,          // Allow complex queries for debugging
-  enableDetailedLogging: true,           // Full logging for development
-  requireSSL: false                      // Allow non-SSL for local dev
-};
+import { PostgresConnector } from '@thias-se/freshguard-core';
+
+// Secure connection configuration
+const connector = new PostgresConnector({
+  host: process.env.DB_HOST!,
+  port: parseInt(process.env.DB_PORT!) || 5432,
+  database: process.env.DB_NAME!,
+  username: process.env.DB_USER!,     // Use dedicated read-only user
+  password: process.env.DB_PASSWORD!, // Store in environment variables
+  ssl: true,                          // Always use SSL in production
+});
+```
+
+### Environment Variables
+
+Always use environment variables for sensitive configuration:
+
+```bash
+# Required database configuration
+DB_HOST=your-database-host
+DB_PORT=5432
+DB_NAME=your-database
+DB_USER=freshguard_readonly
+DB_PASSWORD=secure-random-password
+
+# Application configuration
+NODE_ENV=production
+LOG_LEVEL=info
 ```
 
 ### Database User Setup
@@ -128,424 +119,235 @@ GRANT freshguard_readonly TO freshguard_monitor;
 
 ## Production Deployment
 
-### Environment Variables
+## Using the CLI Tool
+
+The included CLI provides basic operations:
 
 ```bash
-# Database Configuration
-DB_HOST=your-secure-database-host
-DB_PORT=5432
-DB_NAME=production_db
-DB_USER=freshguard_monitor           # Read-only user
-DB_PASSWORD=secure_vault_password    # From secret management system
+# Set up your database connection
+export FRESHGUARD_DATABASE_URL="postgresql://user:password@localhost:5432/mydb"
 
-# Security Configuration
-FRESHGUARD_MAX_RISK_SCORE=70
-FRESHGUARD_MAX_COMPLEXITY_SCORE=80
-FRESHGUARD_ENABLE_QUERY_ANALYSIS=true
-FRESHGUARD_REQUIRE_SSL=true
+# Initialize configuration
+pnpm exec freshguard init
 
-# Monitoring Configuration
-FRESHGUARD_LOG_LEVEL=info
-FRESHGUARD_ENABLE_METRICS=true
-FRESHGUARD_DETAILED_LOGGING=false
+# Test the connection
+pnpm exec freshguard test
 
-# Application Configuration
-NODE_ENV=production
-PORT=3000
+# Run basic monitoring
+pnpm exec freshguard run
 ```
 
-### Docker Deployment
+## Docker Example (Basic)
+
+A simple Docker setup for reference:
 
 ```dockerfile
-FROM node:22-alpine
+FROM node:20-alpine
 
-# Security: Create non-root user
-RUN addgroup -g 1001 -S freshguard && adduser -S -u 1001 freshguard -G freshguard
-
-# Application setup
 WORKDIR /app
-COPY package*.json pnpm-lock.yaml ./
-RUN corepack enable pnpm && pnpm install --frozen-lockfile --prod
+COPY package*.json ./
+RUN npm install
 
-# Copy application code
 COPY . .
-RUN chown -R freshguard:freshguard /app
+RUN npm run build
 
-# Security: Run as non-root user
-USER freshguard
+# Use environment variables for configuration
+ENV NODE_ENV=production
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/health || exit 1
-
-EXPOSE 3000
-CMD ["pnpm", "start"]
+CMD ["node", "dist/your-app.js"]
 ```
 
-### Kubernetes Deployment
+## Environment Configuration
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: freshguard-monitor
-  labels:
-    app: freshguard-monitor
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: freshguard-monitor
-  template:
-    metadata:
-      labels:
-        app: freshguard-monitor
-    spec:
-      containers:
-      - name: freshguard
-        image: your-registry/freshguard-monitor:latest
-        ports:
-        - containerPort: 3000
-        env:
-        - name: DB_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: freshguard-secrets
-              key: db-password
-        - name: FRESHGUARD_MAX_RISK_SCORE
-          value: "70"
-        - name: FRESHGUARD_ENABLE_QUERY_ANALYSIS
-          value: "true"
-        - name: NODE_ENV
-          value: "production"
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        # Security Context
-        securityContext:
-          runAsNonRoot: true
-          runAsUser: 1001
-          readOnlyRootFilesystem: true
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-        # Health Checks
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 3000
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 3000
-          initialDelaySeconds: 5
-          periodSeconds: 5
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: freshguard-secrets
-type: Opaque
-data:
-  db-password: <base64-encoded-password>
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: freshguard-service
-spec:
-  selector:
-    app: freshguard-monitor
-  ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 3000
-  type: ClusterIP
+Set up your environment variables:
+
+```bash
+# Database connection
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=your_database
+DB_USER=freshguard_readonly
+DB_PASSWORD=your_secure_password
+
+# Application settings
+NODE_ENV=production
+LOG_LEVEL=info
 ```
 
-## Monitoring and Observability
+## Basic Monitoring
 
-### Structured Logging
+### Simple Health Check
 
-FreshGuard Core provides comprehensive structured logging:
+Create a basic health check for your monitoring:
 
 ```typescript
-import { createDatabaseLogger } from '@thias-se/freshguard-core';
+import { PostgresConnector } from '@thias-se/freshguard-core';
 
-// Configure logging for your environment
-const logger = createDatabaseLogger('postgres', {
-  level: process.env.FRESHGUARD_LOG_LEVEL || 'info',
-  serviceName: 'freshguard-monitor',
-  baseContext: {
-    environment: process.env.NODE_ENV,
-    version: process.env.APP_VERSION,
-    region: process.env.AWS_REGION
-  }
+const connector = new PostgresConnector({
+  host: process.env.DB_HOST!,
+  database: process.env.DB_NAME!,
+  username: process.env.DB_USER!,
+  password: process.env.DB_PASSWORD!,
+  ssl: true,
 });
 
+// Simple health check function
+async function healthCheck() {
+  try {
+    await connector.testConnection();
+    console.log('✅ Database connection healthy');
+    return true;
+  } catch (error) {
+    console.error('❌ Database connection failed:', error.message);
+    return false;
+  }
+}
+
+// Run health check
+healthCheck();
+```
+
+### Logging
+
+FreshGuard Core includes structured logging. Logs are output in JSON format and can be collected by your logging system.
+
+```typescript
 // Logs are automatically generated by connectors
 // Example log output:
 {
   "level": "info",
   "time": "2024-01-22T10:30:00.000Z",
-  "service": "freshguard-core",
-  "component": "postgres",
-  "operation": "getRowCount",
+  "operation": "checkFreshness",
   "table": "orders",
   "duration": 150,
-  "success": true,
-  "rowCount": 50000
+  "success": true
 }
-```
-
-### Metrics Collection
-
-```typescript
-import { createComponentMetrics } from '@thias-se/freshguard-core';
-
-// Metrics are automatically collected by connectors
-const connector = new PostgresConnector(dbConfig, {
-  enableMetrics: true
-});
-
-// Access metrics for monitoring systems
-const metrics = connector.getMetrics();
-
-// Export to Prometheus format
-const prometheusMetrics = metrics.exportPrometheus();
-
-// Key metrics available:
-// - freshguard_queries_total{database,table,operation,status}
-// - freshguard_query_duration_seconds{database,table,operation}
-// - freshguard_circuit_breaker_state{name}
-// - freshguard_cache_operations_total{type,status}
-```
-
-### Health Check Endpoint
-
-```typescript
-import express from 'express';
-import { PostgresConnector } from '@thias-se/freshguard-core';
-
-const app = express();
-const connector = new PostgresConnector(dbConfig);
-
-app.get('/health', async (req, res) => {
-  try {
-    // Test database connectivity
-    await connector.testConnection();
-
-    // Check cache statistics
-    const cacheStats = connector.getSchemaCacheStats();
-
-    // Check circuit breaker status
-    const circuitBreakerStats = connector.getCircuitBreakerStats();
-
-    res.json({
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      database: {
-        connected: true,
-        cacheHitRatio: cacheStats.hitRatio,
-        circuitBreakerState: circuitBreakerStats.state
-      }
-    });
-  } catch (error) {
-    res.status(503).json({
-      status: 'unhealthy',
-      timestamp: new Date().toISOString(),
-      error: error.message
-    });
-  }
-});
-
-app.get('/metrics', (req, res) => {
-  const metrics = connector.getMetrics().exportPrometheus();
-  res.set('Content-Type', 'text/plain');
-  res.send(metrics);
-});
-
-app.listen(3000);
 ```
 
 ## Data Freshness Monitoring
 
-### Configuration-Based Monitoring
-
-Create `freshguard-config.yaml`:
-
-```yaml
-# FreshGuard Configuration
-databases:
-  production:
-    type: postgres
-    host: ${DB_HOST}
-    port: 5432
-    database: ${DB_NAME}
-    username: ${DB_USER}
-    password: ${DB_PASSWORD}
-    ssl: true
-
-    # Security settings
-    security:
-      enableQueryAnalysis: true
-      maxQueryRiskScore: 70
-      maxQueryComplexityScore: 80
-      requireSSL: true
-
-# Monitoring rules
-rules:
-  - id: orders_freshness
-    database: production
-    table: orders
-    type: freshness
-    timestampColumn: created_at
-    frequency: 300              # Check every 5 minutes
-    toleranceMinutes: 60        # Alert if > 1 hour stale
-    enabled: true
-
-    alerts:
-      - type: slack
-        webhook: ${SLACK_WEBHOOK_URL}
-        severity: warning
-
-      - type: pagerduty
-        integrationKey: ${PAGERDUTY_INTEGRATION_KEY}
-        severity: critical
-        onlyAfter: 120            # Only page after 2 hours
-
-  - id: events_volume_anomaly
-    database: production
-    table: events
-    type: volume_anomaly
-    frequency: 900              # Check every 15 minutes
-    baselineWindowDays: 7       # Use 7-day baseline
-    deviationThreshold: 25      # Alert if ±25% from baseline
-    enabled: true
-
-    alerts:
-      - type: email
-        addresses: ["data-team@company.com"]
-        severity: warning
-```
-
 ### Programmatic Monitoring
+
+Build your own monitoring system using the core API:
 
 ```typescript
 import {
   PostgresConnector,
-  MonitoringRule,
   checkFreshness,
   checkVolumeAnomaly,
-  checkSchemaChanges
+  createMetadataStorage
 } from '@thias-se/freshguard-core';
-import cron from 'node-cron';
+import type { MonitoringRule } from '@thias-se/freshguard-core';
 
-// Initialize secure connector
-const connector = new PostgresConnector(dbConfig, {
-  enableQueryAnalysis: true,
-  maxQueryRiskScore: 70,
-  enableDetailedLogging: process.env.NODE_ENV !== 'production'
+// Set up database connection
+const connector = new PostgresConnector({
+  host: process.env.DB_HOST!,
+  database: process.env.DB_NAME!,
+  username: process.env.DB_USER!,
+  password: process.env.DB_PASSWORD!,
+  ssl: true,
 });
 
+// Set up metadata storage (for volume monitoring)
+const metadataStorage = await createMetadataStorage();
+
 // Define monitoring rules
-const rules: MonitoringRule[] = [
-  {
-    id: 'orders-freshness',
-    type: 'freshness',
-    table: 'orders',
-    timestampColumn: 'created_at',
-    toleranceMinutes: 60,
-    frequency: 300,
-    alerts: [{
-      type: 'slack',
-      webhook: process.env.SLACK_WEBHOOK_URL!
-    }]
-  },
-  {
-    id: 'events-volume',
-    type: 'volume_anomaly',
-    table: 'events',
-    baselineWindowDays: 7,
-    deviationThreshold: 25,
-    frequency: 900,
-    alerts: [{
-      type: 'pagerduty',
-      integrationKey: process.env.PAGERDUTY_KEY!
-    }]
-  },
-  {
-    id: 'users-schema',
-    type: 'schema_change',
-    table: 'users',
-    frequency: 3600,                    // Check hourly
-    schemaChangeConfig: {
-      adaptationMode: 'manual',         // Require manual approval
-      monitoringMode: 'full',           // Monitor all columns
-      trackedColumns: {
-        alertLevel: 'high',             // High-priority alerts for schema changes
-        trackTypes: true,               // Track data type changes
-        trackNullability: false         // Don't track nullability changes
-      }
-    },
-    alerts: [{
-      type: 'slack',
-      webhook: process.env.SLACK_WEBHOOK_URL!,
-      severity: 'critical'              // Schema changes are critical
-    }]
-  }
-];
+const freshnessRule: MonitoringRule = {
+  id: 'orders-freshness',
+  sourceId: 'main_db',
+  name: 'Orders Freshness Check',
+  tableName: 'orders',
+  ruleType: 'freshness',
+  toleranceMinutes: 60,
+  timestampColumn: 'created_at',
+  checkIntervalMinutes: 5,
+  isActive: true,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
 
-// Schedule monitoring with automatic security protection
+const volumeRule: MonitoringRule = {
+  id: 'orders-volume',
+  sourceId: 'main_db',
+  name: 'Orders Volume Check',
+  tableName: 'orders',
+  ruleType: 'volume_anomaly',
+  checkIntervalMinutes: 15,
+  isActive: true,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+// Run checks
 async function runMonitoring() {
-  for (const rule of rules) {
-    try {
-      let result;
-
-      if (rule.type === 'freshness') {
-        result = await checkFreshness(connector, rule);
-      } else if (rule.type === 'volume_anomaly') {
-        result = await checkVolumeAnomaly(connector, rule);
-      } else if (rule.type === 'schema_change') {
-        result = await checkSchemaChanges(connector, rule);
-      }
-
-      // Handle alerts
-      if (result?.status === 'alert') {
-        await sendAlert(rule, result);
-      }
-
-    } catch (error) {
-      console.error(`Monitoring failed for rule ${rule.id}:`, error.message);
-      // Log but don't crash - other rules should continue
+  try {
+    // Check freshness
+    const freshnessResult = await checkFreshness(connector, freshnessRule);
+    if (freshnessResult.status === 'alert') {
+      console.log(`⚠️ Data is stale: ${freshnessResult.lagMinutes}m`);
+      // Send your own alerts here
     }
+
+    // Check volume
+    const volumeResult = await checkVolumeAnomaly(connector, volumeRule, metadataStorage);
+    if (volumeResult.status === 'alert') {
+      console.log(`⚠️ Volume anomaly detected`);
+      // Send your own alerts here
+    }
+
+  } catch (error) {
+    console.error('Monitoring check failed:', error.message);
+  }
+}
+```
+
+### Simple Scheduling
+
+For regular monitoring, you can set up a simple schedule:
+
+```typescript
+// Simple monitoring loop
+setInterval(async () => {
+  await runMonitoring();
+}, 5 * 60 * 1000); // Run every 5 minutes
+```
+
+### Custom Alerting
+
+Build your own alerting by checking the results:
+
+```typescript
+// Example: Send Slack notification
+async function sendSlackAlert(message: string) {
+  if (process.env.SLACK_WEBHOOK_URL) {
+    await fetch(process.env.SLACK_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: message })
+    });
   }
 }
 
-// Schedule monitoring
-cron.schedule('*/5 * * * *', runMonitoring);
+// Use in your monitoring
+if (result.status === 'alert') {
+  await sendSlackAlert(`⚠️ Data freshness alert: ${result.lagMinutes}m lag`);
+}
 ```
 
 ## Support and Resources
 
-- **Integration Guide**: [Complete integration documentation](./INTEGRATION_GUIDE.md)
-- **Security Guide**: [Comprehensive security documentation](./SECURITY_FOR_SELF_HOSTERS.md)
+- **Integration Guide**: [Implementation examples](./INTEGRATION_GUIDE.md)
+- **Security Guide**: [Security considerations](./SECURITY_FOR_SELF_HOSTERS.md)
 - **GitHub Issues**: [Report bugs or request features](https://github.com/thias-se/freshguard-core/issues)
 - **GitHub Discussions**: [Ask questions and share experiences](https://github.com/thias-se/freshguard-core/discussions)
+
+## Next Steps
+
+1. **Start Simple**: Use the CLI tool to test connectivity and basic monitoring
+2. **Build Custom Logic**: Use the API to create monitoring that fits your needs
+3. **Add Alerting**: Integrate with your existing notification systems
+4. **Scale Up**: Deploy in your preferred environment (Docker, systemd, etc.)
 
 ## License
 
 MIT License - Free for commercial and personal use. See [LICENSE](../LICENSE) for details.
-
----
-
-**Ready to deploy data monitoring?** 🚀
-
-Start with the [Integration Guide](./INTEGRATION_GUIDE.md) for detailed implementation examples, then refer to the [Security Guide](./SECURITY_FOR_SELF_HOSTERS.md) for production hardening.
