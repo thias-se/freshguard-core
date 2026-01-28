@@ -1,11 +1,9 @@
 # FreshGuard Core
 
-**Security-hardened, open source data pipeline freshness monitoring engine.**
+**Open source data pipeline freshness monitoring engine for self-hosting.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![pnpm version](https://img.shields.io/npm/v/@thias-se/freshguard-core.svg)](https://www.npmjs.com/package/@thias-se/freshguard-core)
-[![Security: Hardened](https://img.shields.io/badge/Security-Hardened-green.svg)](docs/SECURITY_FOR_SELF_HOSTERS.md)
-[![Package: Signed](https://img.shields.io/badge/Package-Signed-blue.svg)](https://github.com/sigstore/cosign)
 
 ## What is FreshGuard Core?
 
@@ -16,33 +14,30 @@ Monitor when your data pipelines go stale. Get alerts when:
 
 Supports PostgreSQL, DuckDB, BigQuery, and Snowflake. Self-hosted. Free forever.
 
-## 🔒 Security Features (Phase 2 Complete)
+## 🔒 Security Features
 
-FreshGuard Core implements advanced threat detection:
+FreshGuard Core includes basic security protections for self-hosted deployments:
 
-**🛡️ Query Security & Analysis**
-- ✅ **Advanced SQL Injection Protection** - 0-100 risk scoring with pattern analysis
-- ✅ **Query Complexity Analysis** - Automatic blocking of expensive/dangerous queries
-- ✅ **Real-time Threat Detection** - Sophisticated attack pattern recognition
-- ✅ **Schema-aware Validation** - Table metadata integration for enhanced security
+**🛡️ Query Security**
+- ✅ **SQL Injection Protection** - Input validation and pattern analysis
+- ✅ **Query Validation** - Basic checks for dangerous operations
+- ✅ **Input Sanitization** - Identifier validation and parameter checking
 
-**🔄 Production Resilience**
+**🔄 Resilience Features**
 - ✅ **Circuit Breaker Protection** - Automatic failure detection and recovery
-- ✅ **Exponential Backoff Retry** - Intelligent retry logic with jitter
-- ✅ **Connection Pooling** - Resource management and leak prevention
-- ✅ **Timeout Protection** - DoS attack mitigation with AbortController
+- ✅ **Retry Logic** - Exponential backoff with jitter
+- ✅ **Timeout Protection** - Query and connection timeouts
+- ✅ **Connection Management** - Basic connection pooling
 
-**📊 Complete Observability**
-- ✅ **Structured Logging** - Pino-based JSON logging with sensitive data sanitization
-- ✅ **Performance Metrics** - Query performance tracking with percentiles
-- ✅ **Security Audit Trail** - Comprehensive logging of security events
-- ✅ **Prometheus Integration** - Export metrics for monitoring systems
+**📊 Observability**
+- ✅ **Structured Logging** - JSON logging with Pino
+- ✅ **Error Handling** - Sanitized error messages
+- ✅ **Performance Tracking** - Basic query performance metrics
 
-**🔐 Infrastructure Security**
-- ✅ **SSL/TLS Enforcement** - Encrypted connections required by default
-- ✅ **Credential Security** - Environment-based secrets, never hardcoded
-- ✅ **Error Sanitization** - No sensitive information leaked in logs
-- ✅ **Package Signing** - Cosign-signed releases with SBOM transparency
+**🔐 Security Basics**
+- ✅ **SSL/TLS Support** - Secure database connections
+- ✅ **Environment Variables** - Secure credential management
+- ✅ **Error Sanitization** - Safe error messages
 
 **📋 [Complete Security Guide →](docs/SECURITY_FOR_SELF_HOSTERS.md)** | **🚀 [Integration Guide →](docs/INTEGRATION_GUIDE.md)**
 
@@ -54,20 +49,20 @@ FreshGuard Core implements advanced threat detection:
 pnpm install @thias-se/freshguard-core
 ```
 
-### 2. Check Freshness (Secure)
+### 2. Check Freshness
 
 ```typescript
 import { checkFreshness, PostgresConnector } from '@thias-se/freshguard-core';
 import type { MonitoringRule } from '@thias-se/freshguard-core';
 
-// Secure connection with environment variables
+// Connect to your database
 const connector = new PostgresConnector({
   host: process.env.DB_HOST || 'localhost',
   port: Number(process.env.DB_PORT) || 5432,
   database: process.env.DB_NAME || 'mydb',
   username: process.env.DB_USER!,
   password: process.env.DB_PASSWORD!,
-  ssl: true, // SSL enforced by default
+  ssl: true, // Enable SSL for secure connections
 });
 
 const rule: MonitoringRule = {
@@ -93,7 +88,7 @@ if (result.status === 'alert') {
 }
 ```
 
-### 3. Check Volume Anomalies (Secure)
+### 3. Check Volume Anomalies
 
 ```typescript
 import { checkVolumeAnomaly, PostgresConnector } from '@thias-se/freshguard-core';
@@ -103,7 +98,7 @@ const connector = new PostgresConnector({
   database: process.env.DB_NAME!,
   username: process.env.DB_USER!,
   password: process.env.DB_PASSWORD!,
-  ssl: true, // Required for production
+  ssl: true,
 });
 
 const result = await checkVolumeAnomaly(connector, rule);
@@ -113,7 +108,7 @@ if (result.status === 'alert') {
 }
 ```
 
-### 4. Monitor Schema Changes (Secure)
+### 4. Monitor Schema Changes
 
 ```typescript
 import { checkSchemaChanges, PostgresConnector } from '@thias-se/freshguard-core';
@@ -184,7 +179,7 @@ FreshGuard tracks execution history for volume anomaly detection and monitoring 
 ```typescript
 import { createMetadataStorage, checkVolumeAnomaly, PostgresConnector } from '@thias-se/freshguard-core';
 
-// Create secure connector
+// Create database connector
 const connector = new PostgresConnector({
   host: process.env.DB_HOST!,
   database: process.env.DB_NAME!,
@@ -296,9 +291,9 @@ try {
 ✅ **Snowflake** - Enterprise data platforms
 
 ### 🔒 Security
-✅ **Security-Hardened** - High-grade security built-in
-✅ **Signed Packages** - Cryptographically signed releases
-✅ **Supply Chain Security** - SBOM and vulnerability scanning
+✅ **Security Basics** - Input validation and secure connections
+✅ **Error Sanitization** - Safe error handling and logging
+✅ **Open Source** - Transparent and auditable code
 
 ### 🛠️ Developer Experience
 ✅ **Type-Safe** - Written in TypeScript with full type definitions
@@ -306,12 +301,12 @@ try {
 ✅ **Self-Hosted** - Run on your own infrastructure
 ✅ **MIT Licensed** - Free to use, modify, and distribute
 
-## 🖥️ Secure CLI Usage
+## 🖥️ CLI Usage
 
-FreshGuard Core includes a **security-hardened CLI** for self-hosters:
+FreshGuard Core includes a CLI tool for self-hosters:
 
 ```bash
-# Set up secure environment variables
+# Set up environment variables
 export FRESHGUARD_DATABASE_URL="postgresql://user:password@localhost:5432/db?sslmode=require"
 
 # Initialize monitoring configuration
@@ -324,26 +319,26 @@ pnpm exec freshguard test
 pnpm exec freshguard run
 ```
 
-**Security Features:**
-- 🔐 **Environment-based credentials** - Never expose secrets in command line
-- 🛡️ **Path traversal protection** - Configuration files validated for safety
-- 🔒 **SSL enforcement** - Secure connections required by default
-- 📝 **Audit logging** - All operations logged for security monitoring
+**Features:**
+- 🔐 **Environment variables** - Secure credential management
+- 📝 **Configuration validation** - Proper setup verification
+- 🔒 **SSL support** - Secure database connections
+- 📊 **Monitoring commands** - Run checks and view results
 
-**📋 [CLI Security Guide →](docs/SECURITY_FOR_SELF_HOSTERS.md#cli-security)**
+**📋 [Security Guide →](docs/SECURITY_FOR_SELF_HOSTERS.md)**
 
 ## 🚀 Self-Hosting
 
-### Security-First Deployment
+### Production Deployment
 
-**📋 [Complete Security Guide →](docs/SECURITY_FOR_SELF_HOSTERS.md)**
+**📋 [Security Guide →](docs/SECURITY_FOR_SELF_HOSTERS.md)**
 
-Essential security documentation for production deployments:
-- **🔒 Pre-deployment security checklist**
-- **🗄️ Database security hardening** (PostgreSQL, BigQuery, Snowflake)
-- **🌐 Network security configuration**
-- **🔑 Credential management best practices**
-- **📊 Security monitoring and incident response**
+Important considerations for production deployments:
+- **🔒 Security checklist and best practices**
+- **🗄️ Database security configuration** (PostgreSQL, BigQuery, Snowflake)
+- **🌐 Network configuration**
+- **🔑 Credential management**
+- **📊 Monitoring and logging**
 
 ### Deployment Guides
 
@@ -376,23 +371,23 @@ We welcome contributions! See [CONTRIBUTING.md](docs/CONTRIBUTING.md).
 
 ## Examples
 
-### 🔒 Secure Database Connections
+### 📊 Database Connections
 
 ```typescript
 import { PostgresConnector, BigQueryConnector } from '@thias-se/freshguard-core';
 
-// PostgreSQL with SSL enforcement
+// PostgreSQL connection
 const pgConfig = {
   host: 'localhost',
   port: 5432,
   database: 'myapp',
   username: process.env.DB_USER!,
   password: process.env.DB_PASSWORD!,
-  ssl: true, // Required by default for security
+  ssl: true, // Enable SSL for secure connections
 };
 const postgres = new PostgresConnector(pgConfig);
 
-// BigQuery with service account
+// BigQuery connection
 const bqConfig = {
   host: 'bigquery.googleapis.com',
   database: 'my-project',
@@ -409,13 +404,13 @@ import { checkFreshness } from '@thias-se/freshguard-core';
 import { PostgresConnector } from '@thias-se/freshguard-core';
 import { sendSlackAlert } from './alerts.js';
 
-// Secure connection using environment variables
+// Database connection
 const connector = new PostgresConnector({
   host: process.env.DB_HOST!,
   database: process.env.DB_NAME!,
   username: process.env.DB_USER!,
   password: process.env.DB_PASSWORD!,
-  ssl: true, // SSL required for production
+  ssl: true,
 });
 
 const result = await checkFreshness(connector, rule);
@@ -505,28 +500,13 @@ cron.schedule('0 * * * *', async () => {
 });
 ```
 
-### 🔍 Package Signature Verification
-
-Verify the integrity of FreshGuard Core packages:
-
-```bash
-# Download signature files from GitHub release
-curl -L -o freshguard-core.tgz.sig "https://github.com/user/repo/releases/latest/download/freshguard-core.tgz.sig"
-curl -L -o freshguard-core.tgz.crt "https://github.com/user/repo/releases/latest/download/freshguard-core.tgz.crt"
-
-# Verify with cosign
-cosign verify-blob --certificate freshguard-core.tgz.crt --signature freshguard-core.tgz.sig \
-  --certificate-identity-regexp=".*" \
-  --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
-  freshguard-core.tgz
-```
 
 ## 📚 API Documentation
 
-### Security-First Connectors
+### Database Connectors
 
 ```typescript
-// Import secure connectors, monitoring functions, and error classes
+// Import connectors, monitoring functions, and error classes
 import {
   PostgresConnector,
   DuckDBConnector,
@@ -562,23 +542,23 @@ All errors include:
 
 ### `checkFreshness(connector, rule)`
 
-Check data freshness for a given rule with security built-in.
+Check data freshness for a given monitoring rule.
 
 **Parameters:**
-- `connector` - Secure database connector (PostgresConnector, BigQueryConnector, etc.)
+- `connector` - Database connector (PostgresConnector, BigQueryConnector, etc.)
 - `rule` - Monitoring rule configuration
 
-**Returns:** `Promise<CheckResult>` with sanitized error messages
+**Returns:** `Promise<CheckResult>` with status and lag information
 
 ### `checkVolumeAnomaly(connector, rule)`
 
-Check for volume anomalies with statistical safety measures.
+Check for volume anomalies in row counts.
 
 **Parameters:**
-- `connector` - Secure database connector
-- `rule` - Monitoring rule configuration with validation
+- `connector` - Database connector
+- `rule` - Monitoring rule configuration
 
-**Returns:** `Promise<CheckResult>` with overflow protection
+**Returns:** `Promise<CheckResult>` with anomaly detection results
 
 ### `checkSchemaChanges(connector, rule)`
 
@@ -600,7 +580,7 @@ Monitor database schema changes with configurable adaptation modes.
 
 ### Database Connectors
 
-**PostgresConnector** - Production-ready with SSL enforcement
+**PostgresConnector** - PostgreSQL databases with SSL support
 ```typescript
 const connector = new PostgresConnector({
   host: 'localhost',
@@ -608,13 +588,13 @@ const connector = new PostgresConnector({
   database: 'myapp',
   username: process.env.DB_USER!,
   password: process.env.DB_PASSWORD!,
-  ssl: true, // Required by default
+  ssl: true, // Enable SSL for secure connections
 });
 ```
 
-**BigQueryConnector** - Google Cloud with service account validation
-**SnowflakeConnector** - Enterprise data platform with host validation
-**DuckDBConnector** - Analytics with path traversal protection
+**BigQueryConnector** - Google Cloud BigQuery data warehouses
+**SnowflakeConnector** - Snowflake data platform integration
+**DuckDBConnector** - DuckDB for analytics and development
 
 ### 🔧 Environment Setup
 

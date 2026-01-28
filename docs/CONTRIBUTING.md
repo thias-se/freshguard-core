@@ -39,13 +39,13 @@ FreshGuard Core is an open-source MIT-licensed data pipeline freshness monitorin
 
 ```bash
 # Clone the repository
-git clone https://github.com/freshguard/freshguard.git
-cd freshguard
+git clone https://github.com/thias-se/freshguard-core.git
+cd freshguard-core
 
 # Install dependencies
 pnpm install
 
-# Build all packages
+# Build the package
 pnpm build
 
 # Run tests to verify setup
@@ -55,18 +55,31 @@ pnpm test
 ### Understanding the Codebase
 
 ```
-freshguard/
-├── packages/
-│   ├── types/               # Shared TypeScript types
-│   │   └── src/index.ts     # All type definitions
-│   └── core/                # Core monitoring engine
-│       ├── src/
-│       │   ├── connectors/  # Database drivers
-│       │   ├── monitor/     # Core algorithms
-│       │   ├── db/          # Schema and migrations
-│       │   └── index.ts     # Public API
-│       └── tests/           # Test files
+freshguard-core/
+├── src/                     # Core source code
+│   ├── connectors/          # Database drivers
+│   │   ├── postgres.ts      # PostgreSQL connector
+│   │   ├── duckdb.ts        # DuckDB connector
+│   │   ├── bigquery.ts      # BigQuery connector
+│   │   ├── snowflake.ts     # Snowflake connector
+│   │   ├── mysql.ts         # MySQL connector
+│   │   ├── redshift.ts      # Redshift connector
+│   │   └── index.ts         # Exports
+│   ├── monitor/             # Core algorithms
+│   │   ├── freshness.ts     # Freshness checking
+│   │   ├── volume.ts        # Volume anomaly detection
+│   │   ├── schema-changes.ts # Schema monitoring
+│   │   └── index.ts         # Exports
+│   ├── metadata/            # Metadata storage
+│   ├── db/                  # Database schema and migrations
+│   ├── cli/                 # CLI tool
+│   ├── errors/              # Error handling
+│   ├── security/            # Security utilities
+│   ├── types.ts             # Type definitions
+│   └── index.ts             # Public API
+├── tests/                   # Test files
 ├── docs/                    # Documentation
+├── dist/                    # Build output
 └── .github/workflows/       # CI/CD pipelines
 ```
 
@@ -94,7 +107,7 @@ freshguard/
 
 3. **Add tests**: All new functionality must include tests
    ```bash
-   pnpm -F @thias-se/freshguard-core test
+   pnpm test
    ```
 
 4. **Check types**: Ensure no TypeScript errors
@@ -104,7 +117,7 @@ freshguard/
 
 5. **Test coverage**: Meet minimum thresholds
    ```bash
-   pnpm -F @thias-se/freshguard-core test:coverage
+   pnpm test:coverage
    ```
 
 ### Code Quality Requirements
@@ -114,14 +127,15 @@ Before submitting a PR, ensure:
 - ✅ **Tests pass**: `pnpm test`
 - ✅ **Types check**: `pnpm type-check`
 - ✅ **Builds successfully**: `pnpm build`
-- ✅ **Coverage thresholds met**:
-  - Lines: ≥50%
-  - Functions: ≥40%
-  - Branches: ≥50%
-  - Statements: ≥50%
+- ✅ **Test coverage**: Run coverage to ensure tests are comprehensive
+  - Coverage thresholds are not currently enforced but we aim for good coverage
+  - Focus on testing critical functionality and error paths
 
 ```bash
 # Run all checks
+pnpm pre-commit
+
+# Or run individually
 pnpm build && pnpm type-check && pnpm test:coverage
 ```
 
@@ -129,9 +143,9 @@ pnpm build && pnpm type-check && pnpm test:coverage
 
 ### Adding a Database Connector
 
-Example: Adding Snowflake support
+Example: Adding a new connector
 
-1. **Create connector file**: `packages/core/src/connectors/snowflake.ts`
+1. **Create connector file**: `src/connectors/new-connector.ts`
 2. **Implement interface**:
    ```typescript
    interface DatabaseConnector {
@@ -140,38 +154,38 @@ Example: Adding Snowflake support
      executeQuery(sql: string): Promise<any>;
    }
    ```
-3. **Add tests**: `packages/core/tests/connectors/snowflake.test.ts`
-4. **Export**: Add to `packages/core/src/connectors/index.ts`
+3. **Add tests**: `tests/connectors/new-connector.test.ts`
+4. **Export**: Add to `src/connectors/index.ts`
 5. **Update README**: Add example usage
-6. **Integration test**: Test with real Snowflake instance
+6. **Integration test**: Test with real database instance
 
 ### Adding a Monitoring Algorithm
 
 Example: Adding latency detection
 
-1. **Create algorithm**: `packages/core/src/monitor/latency.ts`
+1. **Create algorithm**: `src/monitor/latency.ts`
 2. **Export function**: `export async function checkLatency(config) { }`
-3. **Add tests**: `packages/core/tests/monitor/latency.test.ts`
-4. **Add to public API**: `packages/core/src/index.ts`
+3. **Add tests**: `tests/monitor/latency.test.ts`
+4. **Add to public API**: `src/index.ts`
 5. **Document**: Update README with examples
 
 ### Updating Types
 
-If adding new types to `packages/types/src/index.ts`:
+If adding new types to `src/types.ts`:
 
 1. **Single-tenant only**: No `workspaceId` or multi-tenant features
 2. **Backwards compatible**: Don't break existing interfaces
 3. **Well-documented**: Add JSDoc comments
-4. **Export properly**: Ensure types are exported from core package
+4. **Export properly**: Ensure types are exported from main package
 
 ## 🧪 Testing Guidelines
 
 ### Test Structure
 
 ```typescript
-// packages/core/tests/monitor/freshness.test.ts
+// tests/monitor/freshness.test.ts
 import { describe, it, expect, beforeEach } from 'vitest';
-import { checkFreshness } from '../../src/monitor/freshness.js';
+import { checkFreshness } from '../src/monitor/freshness.js';
 
 describe('checkFreshness', () => {
   beforeEach(async () => {
@@ -201,17 +215,20 @@ describe('checkFreshness', () => {
 # Run all tests
 pnpm test
 
-# Run specific package tests
-pnpm -F @thias-se/freshguard-core test
-
 # Run with coverage
-pnpm -F @thias-se/freshguard-core test:coverage
+pnpm test:coverage
 
 # Watch mode during development
-pnpm -F @thias-se/freshguard-core test -- --watch
+pnpm test -- --watch
 
 # Run specific test file
-pnpm -F @thias-se/freshguard-core test -- freshness.test.ts
+pnpm test -- freshness.test.ts
+
+# Run unit tests only
+pnpm test:unit
+
+# Run integration tests only
+pnpm test:integration
 ```
 
 ## 📋 Pull Request Process
@@ -294,7 +311,7 @@ Describe how you tested this change.
 
 ### Publishing
 
-1. **Update version**: In `packages/*/package.json`
+1. **Update version**: In `package.json`
 2. **Update CHANGELOG**: Document changes
 3. **Tag release**: `git tag v1.2.3`
 4. **Push tag**: `git push origin v1.2.3`
