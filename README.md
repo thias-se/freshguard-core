@@ -14,11 +14,11 @@ Monitor when your data pipelines go stale. Get alerts when:
 - **Row counts deviate unexpectedly** (volume anomaly detection)
 - **Database schemas change unexpectedly** (schema change monitoring)
 
-**Enterprise-grade security** built-in. Supports PostgreSQL, DuckDB, BigQuery, and Snowflake. Self-hosted. Free forever.
+Supports PostgreSQL, DuckDB, BigQuery, and Snowflake. Self-hosted. Free forever.
 
 ## 🔒 Security Features (Phase 2 Complete)
 
-FreshGuard Core implements **enterprise-grade security** with advanced threat detection:
+FreshGuard Core implements advanced threat detection:
 
 **🛡️ Query Security & Analysis**
 - ✅ **Advanced SQL Injection Protection** - 0-100 risk scoring with pattern analysis
@@ -344,7 +344,6 @@ Essential security documentation for production deployments:
 - **🌐 Network security configuration**
 - **🔑 Credential management best practices**
 - **📊 Security monitoring and incident response**
-- **📜 Compliance guidelines** (GDPR, SOC 2, PCI DSS)
 
 ### Deployment Guides
 
@@ -357,10 +356,8 @@ See the [Self-Hosting Guide](docs/SELF_HOSTING.md) for:
 ## What's Not Included
 
 This is the **open source core**. It does not include:
-- Multi-user dashboard (use config files instead)
 - Managed hosting (you manage uptime)
-- Priority support (community support via GitHub)
-- Advanced features (data lineage, ML anomalies)
+- Multi-user dashboard and config UI (use config files instead)
 
 Want these features? Check out **[FreshGuard Cloud](https://freshguard.dev)** - our managed SaaS.
 
@@ -369,7 +366,7 @@ Want these features? Check out **[FreshGuard Cloud](https://freshguard.dev)** - 
 FreshGuard uses an **Open Core** model:
 
 - **`@thias-se/freshguard-core`** (this package) - MIT licensed, open source monitoring engine
-- **`freshguard-cloud`** - Proprietary multi-tenant SaaS (optional)
+- **`freshguard`** - Proprietary multi-tenant SaaS (optional)
 
 You can self-host the core or use our managed cloud service.
 
@@ -644,9 +641,7 @@ MIT - See [LICENSE](./LICENSE)
 - **🤝 [Contributing Guide](docs/CONTRIBUTING.md)** - Development setup and guidelines
 
 **🔒 Security & Production**
-- **🛡️ [Security Guide](docs/SECURITY_FOR_SELF_HOSTERS.md)** - Complete security hardening documentation
-- **📊 [Phase 2 Implementation](docs/core-security-phase2.md)** - Advanced security features and enterprise features
-- **🔍 [Security Testing](docs/LICENSE_CLARIFICATION.md)** - Vulnerability testing and compliance
+- **🛡️ [Security Guide](docs/SECURITY_FOR_SELF_HOSTERS.md)**
 
 **🏗️ Advanced Topics**
 - **⚙️ Configuration Examples** - Environment-specific setups (dev/staging/prod)
@@ -657,13 +652,6 @@ MIT - See [LICENSE](./LICENSE)
 ### 💬 Community
 - **🐛 [Issues](https://github.com/freshguard/freshguard/issues)** - Bug reports and feature requests
 - **💭 [Discussions](https://github.com/freshguard/freshguard/discussions)** - Questions and community support
-- **📚 [GitHub Wiki](https://github.com/freshguard/freshguard/wiki)** - Additional documentation
-
-### 🚨 Security
-Found a security vulnerability? Please follow responsible disclosure:
-- **Email:** security@freshguard.dev
-- **Encrypted:** Use our [PGP key](https://freshguard.dev/security/pgp)
-- **Response time:** 24-48 hours for critical issues
 
 ## Need Managed Hosting?
 
