@@ -59,7 +59,7 @@ async function main(): Promise<void> {
     // Step 1: Create secure database connector
     console.log('📡 Creating secure PostgreSQL connector...');
     connector = new PostgresConnector(dbConfig, securityConfig);
-    console.log('✅ Secure connector created with enterprise security features\n');
+    console.log('✅ Secure connector created with high-grade security features\n');
 
     // Step 2: Test the connection with security validation
     console.log('🔍 Testing secure database connection...');

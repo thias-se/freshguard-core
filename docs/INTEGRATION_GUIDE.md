@@ -109,7 +109,7 @@ await metadataStorage.close();
 
 ## Security Configuration
 
-FreshGuard Core provides enterprise-grade security features that should be configured for your environment.
+FreshGuard Core provides high-grade security features that should be configured for your environment.
 
 ### Development Environment Configuration
 

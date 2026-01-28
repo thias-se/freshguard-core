@@ -1,10 +1,10 @@
 # FreshGuard Core - Secure Monitoring Example
 
-This example demonstrates **FreshGuard Core v0.2.0** with **Phase 2 Security Implementation** for enterprise-grade data pipeline monitoring in a self-hosted environment.
+This example demonstrates **FreshGuard Core v0.2.0** with **Phase 2 Security Implementation** for high-grade data pipeline monitoring in a self-hosted environment.
 
 ## What This Example Shows
 
-✅ **Enterprise Security** - Query complexity analysis, SQL injection protection, SSL enforcement
+✅ **High-grade Security** - Query complexity analysis, SQL injection protection, SSL enforcement
 ✅ **PostgreSQL Integration** - Secure connector with built-in security validation
 ✅ **Freshness Monitoring** - Detect when data becomes stale with automatic query analysis
 ✅ **Volume Anomaly Detection** - Identify unexpected changes in data volume
@@ -71,7 +71,7 @@ Expected output:
    • Advanced SQL injection prevention
 
 📡 Creating secure PostgreSQL connector...
-✅ Secure connector created with enterprise security features
+✅ Secure connector created with security features
 
 🔍 Testing secure database connection...
    Connection verified - PostgreSQL system accessible (4 databases)
@@ -211,7 +211,7 @@ basic-freshness-check/
 ```typescript
 import { PostgresConnector } from '@thias-se/freshguard-core';
 
-// Create secure connector with enterprise security features
+// Create secure connector with security features
 const connector = new PostgresConnector(dbConfig, {
   enableQueryAnalysis: true,      // SQL injection protection
   maxQueryRiskScore: 80,         // Block high-risk queries
@@ -299,7 +299,7 @@ UPDATE orders SET updated_at = '2024-01-01 00:00:00';
 
 ### Production Integration
 
-**Secure Scheduling with Enterprise Features:**
+**Secure Scheduling:**
 ```typescript
 import cron from 'node-cron';
 import { PostgresConnector } from '@thias-se/freshguard-core';

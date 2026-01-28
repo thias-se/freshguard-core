@@ -3,7 +3,7 @@
 /**
  * FreshGuard Core - Secure Monitoring Example
  *
- * This script demonstrates the enterprise-grade security features of FreshGuard Core:
+ * This script demonstrates the high-grade security features of FreshGuard Core:
  * 1. Secure PostgreSQL connector with SSL enforcement
  * 2. Query complexity analysis and SQL injection protection
  * 3. Structured logging and metrics collection

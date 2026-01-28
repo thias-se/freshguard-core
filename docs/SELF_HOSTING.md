@@ -1,10 +1,10 @@
 # Self-Hosting FreshGuard Core
 
-Complete guide for self-hosting FreshGuard Core with enterprise-grade security and monitoring.
+Complete guide for self-hosting FreshGuard Core with high-grade security and monitoring.
 
 ## What You Get (Free, Self-Hosted)
 
-✅ **Enterprise Security** - Query complexity analysis, SQL injection protection, circuit breakers
+✅ **Security** - Query complexity analysis, SQL injection protection, circuit breakers
 ✅ **Core Monitoring Engine** - Freshness + Volume anomaly detection + Schema change monitoring
 ✅ **Multi-Database Support** - PostgreSQL, BigQuery, Snowflake, DuckDB connectors
 ✅ **Production Observability** - Structured logging, metrics, performance monitoring
@@ -15,9 +15,8 @@ Complete guide for self-hosting FreshGuard Core with enterprise-grade security a
 ## What's Not Included (Cloud-Only)
 
 ❌ **Multi-tenant Dashboard** - You get programmatic API or config files
-❌ **99.9% SLA** - Your uptime = your responsibility
+❌ **Uptime SLA** - Your uptime = your responsibility
 ❌ **Managed Infrastructure** - You handle deployment and scaling
-❌ **Priority Support** - Community support via GitHub
 
 ## Quick Start
 
@@ -60,7 +59,7 @@ console.log(`Orders: ${rowCount} rows, last update: ${lastUpdate}`);
 
 ## Security Configuration
 
-FreshGuard Core includes enterprise-grade security features that must be properly configured.
+FreshGuard Core includes security features that must be properly configured.
 
 ### Production Security Setup
 
@@ -158,7 +157,7 @@ PORT=3000
 ### Docker Deployment
 
 ```dockerfile
-FROM node:18-alpine
+FROM node:22-alpine
 
 # Security: Create non-root user
 RUN addgroup -g 1001 -S freshguard && adduser -S -u 1001 freshguard -G freshguard
@@ -547,6 +546,6 @@ MIT License - Free for commercial and personal use. See [LICENSE](../LICENSE) fo
 
 ---
 
-**Ready to deploy enterprise-grade data monitoring?** 🚀
+**Ready to deploy data monitoring?** 🚀
 
 Start with the [Integration Guide](./INTEGRATION_GUIDE.md) for detailed implementation examples, then refer to the [Security Guide](./SECURITY_FOR_SELF_HOSTERS.md) for production hardening.
